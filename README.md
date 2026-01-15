@@ -15,7 +15,7 @@ Display jam untuk motor listrik Polytron Fox R/S disertai display suhu kendaraan
 - ESP32 (WROOM-32)
 - OLED 128x32 (SSD1306, I2C)
 - DS3231 RTC dengan baterai CR2032
-- CAN Transceiver (MCP2515/TJA1050)
+- CAN Bus Transceiver (SN65HVD230) Kode CJMCU-230
 - Push button
 - Power supply 5V/3.3V
 
