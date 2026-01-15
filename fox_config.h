@@ -51,8 +51,8 @@
 // =============================================
 
 // Splash Screen Configuration
-#define SPLASH_TEXT "WELCOME"
-#define SPLASH_DURATION_MS 1500
+#define SPLASH_TEXT "WELCOME"       // Ganti tulisan saat kendaraan pertama kali dinyalakan
+#define SPLASH_DURATION_MS 1500     // Durasi tulisan awal satuan ms atau milidetik
 
 // Page 1: Clock Configuration
 #define CLOCK_TIME_FORMAT "%02d:%02d"
@@ -60,14 +60,14 @@
 #define CLOCK_YEAR_FORMAT "%04d"
 
 // Page 2: Temperature Configuration
-#define TEMP_LABEL_ECU "ECU"
-#define TEMP_LABEL_MOTOR "MOTOR"
-#define TEMP_LABEL_BATT "BATT"
+#define TEMP_LABEL_ECU "ECU"       // Label tulisan di atas suhu controller
+#define TEMP_LABEL_MOTOR "MOTOR"   // Label tulisan di atas suhu bldc dinamo motor
+#define TEMP_LABEL_BATT "BATT"     // Label tulisan di atas suhu baterai
 
 // Page 3: Sport Mode Configuration
-#define SPORT_TEXT "SPORT"
-#define CRUISE_TEXT "CRUISE"
-#define SPORT_MODE_LABEL "SPORT MODE"
+#define SPORT_TEXT "SPORT"         // Tulisan ketika masuk mode Sport
+#define CRUISE_TEXT "CRUISE"       // Tulisan ketika Cruise Control aktif
+#define SPORT_MODE_LABEL "SPORT MODE"  // Tulisan kecil ketika kecepatan mulai melewati batas
 #define KMH_TEXT "km/h"
 #define RPM_TEXT "rpm"
 
@@ -87,7 +87,7 @@
 
 // CAN IDs untuk data performa (dokumen Votol)
 #define FOX_CAN_VOLTAGE       0x0A6D0D09UL  // Tegangan baterai
-#define FOX_CAN_SOC           0x0A6E0D09UL  // State of Charge (%)
+#define FOX_CAN_SOC           0x0A6E0D09UL  // Persentase baterai atau State of Charge (%)
 #define FOX_CAN_CURRENT       0x0A6F0D09UL  // Arus (Current)
 
 // =============================================
