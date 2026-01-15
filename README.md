@@ -3,7 +3,11 @@
 
 Display jam untuk motor listrik Polytron Fox R/S disertai display suhu kendaraan secara realtime
 
+## DONASI
 
+Jika kode ini membantu mungkin sedikit donasi akan sangat saya hargai
+
+[![Donate](https://cdn-icons-png.flaticon.com/256/5002/5002279.png)](https://saweria.co/yudhaisme)
 
 
 ## Features
