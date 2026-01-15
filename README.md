@@ -22,6 +22,7 @@ Display jam untuk motor listrik Polytron Fox R/S disertai display suhu kendaraan
 - CJMCU-230
 - SN65HVD230 dengan kode CJMCU-230 (BUKAN MCP2515)
 - Step down ke 5v (jika ambil dari reducer 12v ke 5v)
+- Kabel, Solder, dan Timah
 ## SOFTWARE dan DRIVER
 ### ARDUINO IDE
 download di https://www.arduino.cc/en/software/
