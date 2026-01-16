@@ -4,7 +4,7 @@
 #include <Arduino.h>
 #include "fox_config.h"
 
-// Definisi struct di SINI (di header)
+// Definisi struct
 struct FoxVehicleData {
     // Mode & Status
     FoxVehicleMode mode;
@@ -33,6 +33,7 @@ struct FoxVehicleData {
     bool speedValid : 1;
     bool tempValid : 1;
     bool voltageValid : 1;
+    bool socValid : 1;
 };
 
 // Function prototypes
@@ -49,6 +50,8 @@ void parseModeStatus(const uint8_t* data, uint8_t len);
 void parseSpeedAndTemp(const uint8_t* data, uint8_t len);
 void parseBatteryTemp5S(const uint8_t* data, uint8_t len);
 void parseBatteryTempSingle(const uint8_t* data, uint8_t len);
+void parseVoltageCurrent(const uint8_t* data, uint8_t len);
+void parseSOC(const uint8_t* data, uint8_t len);
 void captureUnknownCANData(uint32_t canId, const uint8_t* data, uint8_t len);
 void logUnknownMode(uint8_t modeByte);
 void logModeChange(uint8_t modeByte);
