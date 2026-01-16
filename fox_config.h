@@ -26,6 +26,29 @@
 #define RTC_I2C_ADDRESS 0x68
 
 // =============================================
+// PAGE CONFIGURATION SYSTEM
+// =============================================
+
+// Enable/disable pages (true/false)
+#define PAGE_CLOCK_ENABLED     true    // Page 1: Clock
+#define PAGE_TEMP_ENABLED      true    // Page 2: Temperature  
+#define PAGE_ELECTRICAL_ENABLED false  // Page 3: Electrical (currently disabled)
+// Page 9 (Sport) is always enabled for automatic mode switching
+
+// Maximum number of user pages (excluding sport page)
+#if PAGE_CLOCK_ENABLED && PAGE_TEMP_ENABLED && PAGE_ELECTRICAL_ENABLED
+  #define MAX_USER_PAGES 3
+#elif (PAGE_CLOCK_ENABLED && PAGE_TEMP_ENABLED) || \
+      (PAGE_CLOCK_ENABLED && PAGE_ELECTRICAL_ENABLED) || \
+      (PAGE_TEMP_ENABLED && PAGE_ELECTRICAL_ENABLED)
+  #define MAX_USER_PAGES 2
+#elif PAGE_CLOCK_ENABLED || PAGE_TEMP_ENABLED || PAGE_ELECTRICAL_ENABLED
+  #define MAX_USER_PAGES 1
+#else
+  #define MAX_USER_PAGES 0
+#endif
+
+// =============================================
 // KONFIGURASI VEHICLE
 // =============================================
 
@@ -39,6 +62,34 @@
 #define MODE_BYTE_CUTOFF_2 0x72
 #define MODE_BYTE_STANDBY_1 0x78
 #define MODE_BYTE_STANDBY_2 0x08
+#define MODE_BYTE_STANDBY_3 0xB8
+#define MODE_BYTE_CHARGING_1 0x61
+#define MODE_BYTE_CHARGING_2 0xA1
+#define MODE_BYTE_CHARGING_3 0xA9
+#define MODE_BYTE_CHARGING_4 0x69  // Charging dengan side stand
+#define MODE_BYTE_REVERSE 0x50
+#define MODE_BYTE_NEUTRAL 0x40
+
+// Macro untuk deteksi semua charging modes
+#define IS_CHARGING_MODE(b) ((b) == MODE_BYTE_CHARGING_1 || \
+                             (b) == MODE_BYTE_CHARGING_2 || \
+                             (b) == MODE_BYTE_CHARGING_3 || \
+                             (b) == MODE_BYTE_CHARGING_4)
+
+// Macro untuk deteksi semua known modes
+#define IS_KNOWN_MODE(b) ((b) == MODE_BYTE_PARK || \
+                          (b) == MODE_BYTE_DRIVE || \
+                          (b) == MODE_BYTE_SPORT || \
+                          (b) == MODE_BYTE_CRUISE || \
+                          (b) == MODE_BYTE_SPORT_CRUISE || \
+                          (b) == MODE_BYTE_CUTOFF_1 || \
+                          (b) == MODE_BYTE_CUTOFF_2 || \
+                          (b) == MODE_BYTE_STANDBY_1 || \
+                          (b) == MODE_BYTE_STANDBY_2 || \
+                          (b) == MODE_BYTE_STANDBY_3 || \
+                          (b) == MODE_BYTE_REVERSE || \
+                          (b) == MODE_BYTE_NEUTRAL || \
+                          IS_CHARGING_MODE(b))
 
 // Speed Configuration
 #define SPEED_TRIGGER_SPORT_PAGE 80  // Speed untuk trigger mode page sport (km/h)
@@ -71,6 +122,9 @@
 #define KMH_TEXT "km/h"
 #define RPM_TEXT "rpm"
 
+// Charging Mode Configuration
+#define CHARGING_TEXT "CHARGING"
+
 // Setup Mode Configuration
 #define SETUP_TEXT "SETUP"
 #define SETUP_TIMEOUT_MS 30000
@@ -101,10 +155,17 @@
 
 // Timing Configuration
 #define UPDATE_INTERVAL_NORMAL_MS 1000
+#define UPDATE_INTERVAL_ELECTRICAL_MS 500   // Update lebih cepat untuk page electrical
 #define UPDATE_INTERVAL_SPORT_MS 10
 #define UPDATE_INTERVAL_SETUP_MS 500
+#define UPDATE_INTERVAL_CHARGING_MS 5000    // Update lambat saat charging
 #define DEBUG_INTERVAL_MS 10000
 #define BLINK_INTERVAL_MS 500
+
+// BMS Configuration
+#define BMS_DEADZONE_CURRENT 0.1          // Deadzone 0.1A
+#define BMS_UPDATE_THRESHOLD_VOLTAGE 0.1  // 0.1V perubahan
+#define BMS_UPDATE_THRESHOLD_CURRENT 0.5  // 0.5A perubahan
 
 // Position Configuration
 #define POS_TOP 0
@@ -126,14 +187,16 @@ enum FoxVehicleMode {
     MODE_REVERSE,
     MODE_NEUTRAL,
     MODE_CRUISE,
-    MODE_SPORT_CRUISE
+    MODE_SPORT_CRUISE,
+    MODE_CHARGING
 };
 
-// Display Pages Enumeration
+// Display Pages Enumeration - Decimal Jump System
 enum DisplayPage {
-    PAGE_CLOCK = 1,
-    PAGE_TEMP = 2,
-    PAGE_SPORT = 3
+    PAGE_CLOCK = 1,      // User page 1: Jam & Tanggal
+    PAGE_TEMP = 2,       // User page 2: Suhu
+    PAGE_ELECTRICAL = 3, // User page 3: Voltage & Current
+    PAGE_SPORT = 9       // Hidden page: Sport Mode (auto-trigger only)
 };
 
 #endif
