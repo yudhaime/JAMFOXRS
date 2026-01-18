@@ -18,7 +18,7 @@ static uint8_t decToBcd(uint8_t val) {
     return ((val / 10) << 4) | (val % 10);
 }
 
-bool foxRTCInit() {  // RENAME: initRTC() -> foxRTCInit()
+bool foxRTCInit() {
     Wire.beginTransmission(DS3231_ADDRESS);
     if (Wire.endTransmission() == 0) {
         Serial.println("RTC DS3231 terdeteksi");
@@ -46,7 +46,7 @@ bool foxRTCInit() {  // RENAME: initRTC() -> foxRTCInit()
     return false;
 }
 
-RTCDateTime foxRTCGetDateTime() {  // RENAME: getRTC() -> foxRTCGetDateTime()
+RTCDateTime foxRTCGetDateTime() {
     RTCDateTime dt;
     
     Wire.beginTransmission(DS3231_ADDRESS);
@@ -95,7 +95,7 @@ RTCDateTime foxRTCGetDateTime() {  // RENAME: getRTC() -> foxRTCGetDateTime()
 
 void foxRTCSetTime(uint16_t year, uint8_t month, uint8_t day,
                    uint8_t hour, uint8_t minute, uint8_t second,
-                   uint8_t dayOfWeek) {  // RENAME: setRTCTime() -> foxRTCSetTime()
+                   uint8_t dayOfWeek) {
     
     // Convert tahun ke 2 digit
     uint8_t year2digit = year - 2000;
@@ -149,7 +149,7 @@ void foxRTCSetTime(uint16_t year, uint8_t month, uint8_t day,
     Serial.println(second);
 }
 
-void foxRTCSetFromCompileTime() {  // RENAME: setRTCFromCompileTime() -> foxRTCSetFromCompileTime()
+void foxRTCSetFromCompileTime() {
     // Ambil waktu dari waktu kompilasi (__DATE__ dan __TIME__)
     char monthStr[4];
     int year, month, day, hour, minute, second;
@@ -170,7 +170,7 @@ void foxRTCSetFromCompileTime() {  // RENAME: setRTCFromCompileTime() -> foxRTCS
     foxRTCSetTime(year, month, day, hour, minute, second, 0);
 }
 
-float foxRTCGetTemperature() {  // RENAME: getTemperature() -> foxRTCGetTemperature()
+float foxRTCGetTemperature() {
     Wire.beginTransmission(DS3231_ADDRESS);
     Wire.write(DS3231_TEMP_REG);
     Wire.endTransmission();
@@ -187,7 +187,7 @@ float foxRTCGetTemperature() {  // RENAME: getTemperature() -> foxRTCGetTemperat
     return -100.0; // Error value
 }
 
-bool foxRTCIsRunning() {  // RENAME: isRunning() -> foxRTCIsRunning()
+bool foxRTCIsRunning() {
     Wire.beginTransmission(DS3231_ADDRESS);
     Wire.write(DS3231_CONTROL_REG);
     Wire.endTransmission();
@@ -200,7 +200,7 @@ bool foxRTCIsRunning() {  // RENAME: isRunning() -> foxRTCIsRunning()
     return false;
 }
 
-String foxRTCGetTimeString(bool includeSeconds) {  // RENAME: getTimeString() -> foxRTCGetTimeString()
+String foxRTCGetTimeString(bool includeSeconds) {
     RTCDateTime dt = foxRTCGetDateTime();
     
     char buffer[9];
@@ -215,7 +215,7 @@ String foxRTCGetTimeString(bool includeSeconds) {  // RENAME: getTimeString() ->
     return String(buffer);
 }
 
-String foxRTCGetDateString() {  // RENAME: getDateString() -> foxRTCGetDateString()
+String foxRTCGetDateString() {
     RTCDateTime dt = foxRTCGetDateTime();
     
     char buffer[11];
@@ -225,7 +225,7 @@ String foxRTCGetDateString() {  // RENAME: getDateString() -> foxRTCGetDateStrin
     return String(buffer);
 }
 
-bool foxRTCSetTimeFromString(String timeStr) {  // RENAME: setTimeFromString() -> foxRTCSetTimeFromString()
+bool foxRTCSetTimeFromString(String timeStr) {
     // Format: HH:MM:SS atau HH:MM
     int hour, minute, second = 0;
     
@@ -258,7 +258,7 @@ bool foxRTCSetTimeFromString(String timeStr) {  // RENAME: setTimeFromString() -
     return true;
 }
 
-bool foxRTCSetDateFromString(String dateStr) {  // RENAME: setDateFromString() -> foxRTCSetDateFromString()
+bool foxRTCSetDateFromString(String dateStr) {
     // Format: DD/MM/YYYY
     int day, month, year;
     
@@ -282,7 +282,7 @@ bool foxRTCSetDateFromString(String dateStr) {  // RENAME: setDateFromString() -
     return true;
 }
 
-bool foxRTCSetDayOfWeek(uint8_t dayOfWeek) {  // RENAME: setDayOfWeek() -> foxRTCSetDayOfWeek()
+bool foxRTCSetDayOfWeek(uint8_t dayOfWeek) {
     // Validasi: 1-7 (1=Minggu, 2=Senin, ..., 7=Sabtu)
     if (dayOfWeek < 1 || dayOfWeek > 7) {
         return false;
@@ -308,7 +308,7 @@ bool foxRTCSetDayOfWeek(uint8_t dayOfWeek) {  // RENAME: setDayOfWeek() -> foxRT
     return true;
 }
 
-void foxRTCDebugPrint() {  // RENAME: printRTCDebug() -> foxRTCDebugPrint()
+void foxRTCDebugPrint() {
     RTCDateTime dt = foxRTCGetDateTime();
     float temp = foxRTCGetTemperature();
     
