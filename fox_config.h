@@ -159,15 +159,15 @@
 // =============================================
 
 // Smart Display Update Thresholds
-#define CURRENT_UPDATE_THRESHOLD 0.05     // PERBAIKI: 0.05A change triggers update (dari 0.1)
-#define VOLTAGE_UPDATE_THRESHOLD 0.1      // PERBAIKI: 0.1V change triggers update (dari 0.5)
-#define SPEED_UPDATE_THRESHOLD 1          // 1 km/h change triggers update
-#define TEMP_UPDATE_THRESHOLD 1           // 1°C change triggers update
-#define SOC_UPDATE_THRESHOLD 1            // 1% change triggers update
+#define CURRENT_UPDATE_THRESHOLD 0.1     // 0.1A change triggers update
+#define VOLTAGE_UPDATE_THRESHOLD 0.5     // 0.5V change triggers update
+#define SPEED_UPDATE_THRESHOLD 1         // 1 km/h change triggers update
+#define TEMP_UPDATE_THRESHOLD 1          // 1°C change triggers update
+#define SOC_UPDATE_THRESHOLD 1           // 1% change triggers update
 
 // Update Intervals (Event-Driven + Fallback)
-#define UPDATE_INTERVAL_CRITICAL_MS 50    // PERBAIKI: Current, Speed, RPM (dari 100ms)
-#define UPDATE_INTERVAL_HIGH_MS 100       // PERBAIKI: Voltage (dari 250ms)
+#define UPDATE_INTERVAL_CRITICAL_MS 100   // Current, Speed, RPM
+#define UPDATE_INTERVAL_HIGH_MS 250       // Voltage
 #define UPDATE_INTERVAL_MEDIUM_MS 500     // Temperatures
 #define UPDATE_INTERVAL_LOW_MS 1000       // Clock, SOC
 #define UPDATE_INTERVAL_SPORT_MS 50       // Sport page
