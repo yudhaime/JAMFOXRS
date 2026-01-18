@@ -32,7 +32,7 @@
 // Enable/disable pages (true/false)
 #define PAGE_CLOCK_ENABLED     true    // Page 1: Clock
 #define PAGE_TEMP_ENABLED      true    // Page 2: Temperature  
-#define PAGE_ELECTRICAL_ENABLED false  // Page 3: Electrical (currently disabled)
+#define PAGE_ELECTRICAL_ENABLED true  // Page 3: Electrical (currently disabled)
 // Page 9 (Sport) is always enabled for automatic mode switching
 
 // Maximum number of user pages (excluding sport page)
@@ -115,7 +115,11 @@
 #define TEMP_LABEL_MOTOR "MOTOR"   // Label tulisan di atas suhu bldc dinamo motor
 #define TEMP_LABEL_BATT "BATT"     // Label tulisan di atas suhu baterai
 
-// Page 3: Sport Mode Configuration
+// Page 3: Electrical Configuration
+#define ELECTRICAL_LABEL_VOLT "VOLT"
+#define ELECTRICAL_LABEL_CURR "CURR"
+
+// Page 9: Sport Mode Configuration
 #define SPORT_TEXT "SPORT"         // Tulisan ketika masuk mode Sport
 #define CRUISE_TEXT "CRUISE"       // Tulisan ketika Cruise Control aktif
 #define SPORT_MODE_LABEL "SPORT MODE"  // Tulisan kecil ketika kecepatan mulai melewati batas
@@ -142,25 +146,47 @@
 // CAN IDs untuk data performa (dokumen Votol)
 #define FOX_CAN_VOLTAGE       0x0A6D0D09UL  // Tegangan baterai
 #define FOX_CAN_SOC           0x0A6E0D09UL  // Persentase baterai atau State of Charge (%)
-#define FOX_CAN_CURRENT       0x0A6F0D09UL  // Arus (Current)
+//#define FOX_CAN_CURRENT       0x0A6F0D09UL  // Arus (Current) //salah jadi saya hapus karena voltase dan current ada di satu message
+#define FOX_CAN_VOLTAGE_CURRENT 0x0A6D0D09UL  // Gabungan voltage dan current
+
+// CAN IDs untuk charger (filter)
+#define FOX_CAN_CHARGER_1 0x1810D0F3UL  // Contoh ID charger 1
+#define FOX_CAN_CHARGER_2 0x1811D0F3UL  // Contoh ID charger 2
+#define FOX_CAN_BMS_INFO  0x0A010C10UL  // BMS info message
 
 // =============================================
-// KONFIGURASI TAMPILAN
+// OPTIMIZATION CONFIGURATION
 // =============================================
+
+// Smart Display Update Thresholds
+#define CURRENT_UPDATE_THRESHOLD 0.05     // PERBAIKI: 0.05A change triggers update (dari 0.1)
+#define VOLTAGE_UPDATE_THRESHOLD 0.1      // PERBAIKI: 0.1V change triggers update (dari 0.5)
+#define SPEED_UPDATE_THRESHOLD 1          // 1 km/h change triggers update
+#define TEMP_UPDATE_THRESHOLD 1           // 1°C change triggers update
+#define SOC_UPDATE_THRESHOLD 1            // 1% change triggers update
+
+// Update Intervals (Event-Driven + Fallback)
+#define UPDATE_INTERVAL_CRITICAL_MS 50    // PERBAIKI: Current, Speed, RPM (dari 100ms)
+#define UPDATE_INTERVAL_HIGH_MS 100       // PERBAIKI: Voltage (dari 250ms)
+#define UPDATE_INTERVAL_MEDIUM_MS 500     // Temperatures
+#define UPDATE_INTERVAL_LOW_MS 1000       // Clock, SOC
+#define UPDATE_INTERVAL_SPORT_MS 50       // Sport page
+#define UPDATE_INTERVAL_SETUP_MS 500      // Setup mode blink
+#define UPDATE_INTERVAL_CHARGING_MS 5000  // Charging mode
+
+// Watchdog Timeouts
+#define DISPLAY_WATCHDOG_TIMEOUT_MS 500   // Display update timeout
+#define I2C_WATCHDOG_TIMEOUT_MS 300       // I2C communication timeout
+#define CAN_SILENCE_TIMEOUT_MS 2000       // CAN bus silence timeout
+
+// Debug Configuration
+#define DEBUG_INTERVAL_MS 10000
+#define BLINK_INTERVAL_MS 500
 
 // Font Size Configuration
 #define FONT_SIZE_SMALL 1
 #define FONT_SIZE_MEDIUM 2
 #define FONT_SIZE_LARGE 3
-
-// Timing Configuration
-#define UPDATE_INTERVAL_NORMAL_MS 1000
-#define UPDATE_INTERVAL_ELECTRICAL_MS 500   // Update lebih cepat untuk page electrical
-#define UPDATE_INTERVAL_SPORT_MS 10
-#define UPDATE_INTERVAL_SETUP_MS 500
-#define UPDATE_INTERVAL_CHARGING_MS 5000    // Update lambat saat charging
-#define DEBUG_INTERVAL_MS 10000
-#define BLINK_INTERVAL_MS 500
 
 // BMS Configuration
 #define BMS_DEADZONE_CURRENT 0.1          // Deadzone 0.1A
@@ -171,6 +197,9 @@
 #define POS_TOP 0
 #define POS_MIDDLE 12
 #define POS_BOTTOM 25
+
+// Data freshness timeout
+#define DATA_FRESH_TIMEOUT_MS 5000
 
 // =============================================
 // ENUM & STRUCTURE DEFINITIONS
@@ -197,6 +226,30 @@ enum DisplayPage {
     PAGE_TEMP = 2,       // User page 2: Suhu
     PAGE_ELECTRICAL = 3, // User page 3: Voltage & Current
     PAGE_SPORT = 9       // Hidden page: Sport Mode (auto-trigger only)
+};
+
+// Display Update Priority (for smart updates)
+enum DisplayPriority {
+    PRIORITY_CRITICAL = 0,   // Current, Speed, RPM (< 100ms)
+    PRIORITY_HIGH = 1,       // Voltage (< 250ms)
+    PRIORITY_MEDIUM = 2,     // Temperatures (< 500ms)
+    PRIORITY_LOW = 3         // Clock, SOC, Static text (< 1000ms)
+};
+
+// Display Zones for partial updates
+enum DisplayZone {
+    ZONE_NONE = 0,
+    ZONE_CLOCK_TIME,
+    ZONE_CLOCK_DATE,
+    ZONE_TEMP_ECU,
+    ZONE_TEMP_MOTOR,
+    ZONE_TEMP_BATT,
+    ZONE_VOLTAGE,
+    ZONE_CURRENT,
+    ZONE_SPEED,
+    ZONE_RPM,
+    ZONE_SOC,
+    ZONE_MODE_TEXT
 };
 
 #endif
