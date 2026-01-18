@@ -30,6 +30,7 @@ unsigned long lastCANUpdate = 0;
 // System protection tracking
 unsigned long lastSystemCheck = 0;
 unsigned long lastDisplayErrorLog = 0;
+// displayErrorCount sekarang di fox_display.cpp
 
 // Performance tracking
 unsigned long lastCurrentUpdate = 0;
@@ -554,17 +555,29 @@ void updatePerformanceTracking(uint32_t canId) {
     }
 }
 
+// Fungsi helper untuk CAN interval recommendation
+unsigned long foxVehicleGetRecommendedCANInterval() {
+    FoxVehicleData data = foxVehicleGetData();
+    
+    if(data.mode == MODE_CHARGING) {
+        return 200; // 5Hz saat charging
+    } else if(currentPage == PAGE_SPORT) {
+        return 20;  // 50Hz untuk sport page
+    } else if(currentPage == PAGE_ELECTRICAL) {
+        return 40;  // 25Hz untuk electrical page
+    } else {
+        return 50;  // 20Hz untuk page lainnya
+    }
+}
+
 // =============================================
-// MAIN LOOP - DENGAN PERBAIKAN ELECTRICAL PAGE
+// MAIN LOOP
 // =============================================
 
 void loop() {
     static unsigned long lastUpdate = 0;
     static unsigned long lastDebug = 0;
     static unsigned long lastHealthCheck = 0;
-    static unsigned long lastDataDebug = 0;
-    static unsigned long lastModeDebug = 0;
-    static unsigned long lastCANDebug = 0;
     unsigned long now = millis();
     
     // ========== WATCHDOG TIMER ==========
@@ -574,33 +587,15 @@ void loop() {
         lastWatchdogCheck = now;
     }
     
-    // ========== DEBUG CAN MESSAGE RATE ==========
-    if(now - lastCANDebug > 2000) {
-        FoxVehicleData data = foxVehicleGetData();
-        
-        Serial.print("[DATA] Current: ");
-        Serial.print(data.current, 2);
-        Serial.print("A | Voltage: ");
-        Serial.print(data.voltage, 1);
-        Serial.print("V | Fresh: ");
-        Serial.print(now - data.lastUpdate);
-        Serial.print("ms | CAN rate: ");
-        Serial.print(foxCANGetMessageRate());
-        Serial.println(" msg/s");
-        
-        // Debug untuk electrical page
-        if(currentPage == PAGE_ELECTRICAL) {
-            Serial.print("[ELECTRICAL] Page active | Last current: ");
-            Serial.print(data.current, 2);
-            Serial.println("A");
-        }
-        
-        lastCANDebug = now;
-    }
+    // Process serial commands
+    processSerialCommands();
     
-    // ========== DEBUG MODE INFO ==========
+    // Get vehicle data
+    FoxVehicleData vehicleData = foxVehicleGetData();
+    
+    // ========== DEBUG INFO ==========
+    static unsigned long lastModeDebug = 0;
     if(now - lastModeDebug > 3000) {
-        FoxVehicleData vehicleData = foxVehicleGetData();
         Serial.print("[DEBUG] Mode: ");
         Serial.print(foxVehicleModeToString(vehicleData.mode));
         Serial.print(" | Page: ");
@@ -613,7 +608,7 @@ void loop() {
     }
     
     // ========== SYSTEM HEALTH CHECK ==========
-    if(now - lastHealthCheck > 30000) {
+    if(now - lastHealthCheck > 30000) { // Setiap 30 detik
         if(!foxDisplayIsInitialized()) {
             static unsigned long lastDisplayError = 0;
             if(now - lastDisplayError > 60000) {
@@ -623,12 +618,6 @@ void loop() {
         }
         lastHealthCheck = now;
     }
-    
-    // Process serial commands
-    processSerialCommands();
-    
-    // Get vehicle data
-    FoxVehicleData vehicleData = foxVehicleGetData();
     
     // ========== MODE_UNKNOWN PROTECTION ==========
     if(vehicleData.mode == MODE_UNKNOWN) {
@@ -650,10 +639,12 @@ void loop() {
     
     // ========== NORMAL OPERATION ==========
     
-    // CAN update dengan fixed interval untuk SEMUA MODE (termasuk charging)
+    // CAN update dengan event-driven optimization
     if(foxDisplayIsInitialized()) {
-        // Update CAN dengan fixed interval (50ms = 20Hz)
-        if(now - lastCANUpdate > 50) {
+        // Update CAN dengan priority-based throttling
+        unsigned long canInterval = foxVehicleGetRecommendedCANInterval();
+        
+        if(now - lastCANUpdate > canInterval) {
             foxCANUpdate();
             lastCANUpdate = now;
         }
@@ -663,24 +654,32 @@ void loop() {
     if(vehicleData.mode != lastMode) {
         lastModeChangeTime = now;
         
-        // Log mode change
-        static unsigned long lastModeLog = 0;
-        if(now - lastModeLog > 1000) {
-            Serial.print("Mode changed: ");
-            Serial.print(foxVehicleModeToString(lastMode));
-            Serial.print(" -> ");
-            Serial.println(foxVehicleModeToString(vehicleData.mode));
-            lastModeLog = now;
+        // Handle charging mode transition
+        if(vehicleData.mode == MODE_CHARGING && !wasCharging) {
+            Serial.println("=== CHARGING MODE ===");
+            Serial.println("Button disabled, simple display enabled");
+            wasCharging = true;
+            lastChargingDisplayUpdate = now;
+            lastChargingLog = now;
+            
+            // Force display mode change
+            foxDisplayForceUpdate();
+        } else if(vehicleData.mode != MODE_CHARGING && wasCharging) {
+            Serial.println("=== NORMAL MODE ===");
+            Serial.println("Button enabled");
+            wasCharging = false;
+            
+            // Force display update kembali ke normal
+            foxDisplayForceUpdate();
         }
         
         lastMode = vehicleData.mode;
     }
     
     // ========== BUTTON HANDLING ==========
-    // Button selalu enabled, termasuk saat charging
-    bool buttonEnabled = true;
+    bool buttonEnabled = (vehicleData.mode != MODE_CHARGING);
     
-    // Handle button press - SEMUA MODE (termasuk charging)
+    // Handle button press - HANYA jika tidak charging
     if (buttonEnabled && !setupMode && currentPage != PAGE_SPORT && MAX_USER_PAGES > 0) {
         bool btn = digitalRead(BUTTON_PIN);
         if(btn == LOW && lastButton == HIGH) {
@@ -696,7 +695,7 @@ void loop() {
                 Serial.println(currentPage);
                 
                 if(foxDisplayIsInitialized()) {
-                    foxDisplayUpdateSmart(currentPage, true);
+                    foxDisplayUpdateSmart(currentPage, true); // Force full update
                 }
                 lastUpdate = now;
             }
@@ -707,42 +706,7 @@ void loop() {
         lastButton = HIGH;
     }
     
-    // ========== ELECTRICAL PAGE AUTO-REFRESH ==========
-    // Force update electrical page jika ada data BMS baru
-    if(currentPage == PAGE_ELECTRICAL && foxDisplayIsInitialized()) {
-        FoxVehicleData data = foxVehicleGetData();
-        static unsigned long lastElectricalAutoUpdate = 0;
-        
-        // Check jika data BMS fresh dan valid
-        bool bmsDataFresh = (now - data.lastUpdate < 300);
-        bool hasBMSData = (data.voltageValid || data.currentValid);
-        
-        if(bmsDataFresh && hasBMSData) {
-            // Auto update setiap 250ms maksimal
-            if(now - lastElectricalAutoUpdate > 250) {
-                // Trigger smart update dengan threshold kecil
-                bool needsUpdate = foxDisplayCheckUpdateNeeded(data);
-                if(needsUpdate) {
-                    foxDisplayUpdateSmart(PAGE_ELECTRICAL, false);
-                    
-                    // Debug log
-                    static unsigned long lastBMSDisplayLog = 0;
-                    if(now - lastBMSDisplayLog > 2000) {
-                        Serial.print("[LOOP] Electrical auto-refresh - V:");
-                        Serial.print(data.voltage, 1);
-                        Serial.print("V I:");
-                        Serial.print(data.current, 2);
-                        Serial.println("A");
-                        lastBMSDisplayLog = now;
-                    }
-                }
-                lastElectricalAutoUpdate = now;
-            }
-        }
-    }
-    
     // ========== PAGE SWITCHING (SPORT PAGE AUTO-TRIGGER) ==========
-    // Sport page auto-trigger TETAP AKTIF di semua mode
     if(buttonEnabled) {
         bool shouldBeOnSportPage = (vehicleData.sportActive || 
                                    vehicleData.mode == MODE_SPORT_CRUISE ||
@@ -762,7 +726,7 @@ void loop() {
                 
                 // Immediate smart update
                 if(foxDisplayIsInitialized()) {
-                    foxDisplayUpdateSmart(currentPage, true);
+                    foxDisplayUpdateSmart(currentPage, true); // FORCE FULL UPDATE untuk sport page baru
                     lastUpdate = now;
                 }
             }
@@ -783,7 +747,7 @@ void loop() {
     // ========== SMART DISPLAY UPDATES ==========
     if (setupMode) {
         // Setup mode - simple blinking
-        if(now - lastUpdate > 500) {
+        if(now - lastUpdate > 500) { // UPDATE_INTERVAL_SETUP_MS = 500
             bool blinkState = (millis() / 500) % 2 == 0;
             if(foxDisplayIsInitialized()) {
                 foxDisplayShowSetupMode(blinkState);
@@ -799,14 +763,89 @@ void loop() {
             }
         }
     } 
+    else if (vehicleData.mode == MODE_CHARGING) {
+        // ========== CHARGING MODE ==========
+        if(now - lastChargingDisplayUpdate > 5000) { // UPDATE_INTERVAL_CHARGING_MS = 5000
+            if(foxDisplayIsInitialized()) {
+                foxDisplayUpdateChargingMode();
+            }
+            lastChargingDisplayUpdate = now;
+            lastUpdate = now;
+            
+            // Minimal logging (60 detik sekali)
+            if(now - lastChargingLog > 60000) {
+                RTCDateTime dt = foxRTCGetDateTime();
+                Serial.print("[CHARGING] ");
+                Serial.print(dt.hour);
+                Serial.print(":");
+                if(dt.minute < 10) Serial.print("0");
+                Serial.print(dt.minute);
+                Serial.print(" - ");
+                Serial.print(vehicleData.soc);
+                Serial.print("% ");
+                Serial.print(vehicleData.voltage, 1);
+                Serial.println("V");
+                lastChargingLog = now;
+            }
+        }
+    }
+    else if (currentPage == PAGE_SPORT) {
+        // Sport page dengan smart updates
+        bool isCruiseMode = (vehicleData.mode == MODE_CRUISE || 
+                            vehicleData.mode == MODE_SPORT_CRUISE);
+        
+        if(isCruiseMode) {
+            // ========== CRUISE MODE (BLINKING TEXT) ==========
+            // Update blink state setiap 500ms
+            if(now - lastCruiseBlink > 500) {
+                cruiseBlinkState = !cruiseBlinkState;
+                lastCruiseBlink = now;
+                
+                // Update display untuk efek blink
+                if(foxDisplayIsInitialized()) {
+                    foxDisplayUpdateCruiseMode(cruiseBlinkState);
+                    Serial.print("[CRUISE] Blink update: ");
+                    Serial.println(cruiseBlinkState ? "ON" : "OFF");
+                }
+                lastUpdate = now;
+            }
+        }
+        else {
+            // ========== NORMAL SPORT MODE ==========
+            unsigned long interval = 100;
+            
+            // DETEKSI TRANSISI SPEED THRESHOLD
+            bool speedCrossedThreshold = false;
+            
+            // Cek jika speed melewati batas 80 km/h (naik atau turun)
+            if((lastSportSpeed < SPEED_TRIGGER_SPORT_PAGE && vehicleData.speedKmh >= SPEED_TRIGGER_SPORT_PAGE) ||
+               (lastSportSpeed >= SPEED_TRIGGER_SPORT_PAGE && vehicleData.speedKmh < SPEED_TRIGGER_SPORT_PAGE)) {
+                speedCrossedThreshold = true;
+                Serial.print("[SPORT] Speed threshold crossed: ");
+                Serial.print(lastSportSpeed);
+                Serial.print(" -> ");
+                Serial.println(vehicleData.speedKmh);
+            }
+            
+            // Update last sport speed
+            lastSportSpeed = vehicleData.speedKmh;
+            
+            if(foxDisplayIsInitialized() && (now - lastModeChangeTime > 100)) {
+                if(speedCrossedThreshold || (now - lastUpdate > interval)) {
+                    bool forceFullUpdate = speedCrossedThreshold || (now - lastUpdate > 1000);
+                    foxDisplayUpdateSmart(currentPage, forceFullUpdate);
+                    lastUpdate = now;
+                }
+            }
+        }
+    }
     else {
-        // SEMUA MODE (termasuk charging) pakai update normal
         // Normal pages dengan smart updates
         if(foxDisplayIsInitialized() && (now - lastModeChangeTime > 500)) {
             // Check jika data berubah cukup untuk update
             bool needsUpdate = foxDisplayCheckUpdateNeeded(vehicleData);
             
-            if(needsUpdate || (now - lastUpdate > 1000)) {
+            if(needsUpdate || (now - lastUpdate > 1000)) { // UPDATE_INTERVAL_NORMAL_MS = 1000
                 foxDisplayUpdateSmart(currentPage, false);
                 lastUpdate = now;
             }
@@ -832,7 +871,7 @@ void loop() {
     }
     
     // ========== DEBUG INFO ==========
-    if(showDebugInfo && (now - lastDebug > 10000)) {
+    if(showDebugInfo && (now - lastDebug > 10000) && vehicleData.mode != MODE_CHARGING) { // DEBUG_INTERVAL_MS = 10000
         if (!setupMode) {
             Serial.print("DEBUG - Page:");
             Serial.print(currentPage);
@@ -851,6 +890,6 @@ void loop() {
         lastDebug = now;
     }
     
-    // Small delay untuk stability
+    // Small delay untuk stability (dikurangi untuk responsiveness)
     delay(5);
 }
