@@ -10,18 +10,21 @@
 // Global variables
 bool canInitialized = false;
 bool canEnhancedMode = false;
+
+// Performance tracking
 unsigned long lastCANMessageTime = 0;
 uint32_t canMessagesProcessed = 0;
 uint32_t canMessagesPerSecond = 0;
 uint32_t canMessageCountThisSecond = 0;
 unsigned long lastSecondCheck = 0;
 int canErrorCount = 0;
-unsigned long canThrottleInterval = 50;
+
+// Throttling control
+unsigned long canThrottleInterval = 50; // Default 20Hz
 unsigned long lastCANProcess = 0;
 
-// Basic CAN functions
 bool foxCANInit() {
-    return foxCANInitEnhanced();
+    return foxCANInitEnhanced(); // Use enhanced by default
 }
 
 bool foxCANInitEnhanced() {
@@ -51,6 +54,7 @@ bool foxCANInitEnhanced() {
     canInitialized = true;
     canEnhancedMode = true;
     
+    // Reset statistics
     lastCANMessageTime = millis();
     canMessagesProcessed = 0;
     canMessageCountThisSecond = 0;
@@ -68,7 +72,7 @@ bool foxCANIsInitialized() {
 }
 
 void foxCANUpdate() {
-    foxCANUpdateEventDriven();
+    foxCANUpdateEventDriven(); // Use enhanced by default
 }
 
 void foxCANUpdateEventDriven() {
@@ -80,55 +84,28 @@ void foxCANUpdateEventDriven() {
     // Check for CAN silence timeout
     if (now - lastCANMessageTime > CAN_SILENCE_TIMEOUT_MS) {
         static unsigned long lastSilenceLog = 0;
-        if (now - lastSilenceLog > 10000) {
+        if (now - lastSilenceLog > 10000) { // Log every 10 seconds
             Serial.println("[CAN] No messages for 2 seconds");
             lastSilenceLog = now;
         }
     }
     
-    // Standard throttle control
+    // Throttle control for high message rates
     if (now - lastCANProcess < canThrottleInterval) {
         return;
     }
     
     twai_message_t message;
     
-    // Non-blocking receive
+    // Non-blocking receive with short timeout
     if(twai_receive(&message, pdMS_TO_TICKS(1)) == ESP_OK) {
         lastCANMessageTime = now;
         lastCANProcess = now;
         canMessagesProcessed++;
         canMessageCountThisSecond++;
         
-        // Skip known charger/BMS messages yang sangat sering saat charging
-        FoxVehicleData vehicleData = foxVehicleGetData();
-        bool isChargingMode = (vehicleData.mode == MODE_CHARGING);
-        
-        bool skipMessage = false;
-        
-        if(isChargingMode) {
-            // Skip beberapa charger message IDs saat charging
-            switch(message.identifier) {
-                case 0x1810D0F3:
-                case 0x1811D0F3:
-                case 0x18FFD0F3:
-                case 0x1806D0F3:
-                case 0x1807D0F3:
-                case 0x0A010C10:
-                    skipMessage = true;
-                    break;
-            }
-            
-            // Skip charger ID range
-            if ((message.identifier & 0x1FFFFFF0) == 0x1800D0F0) {
-                skipMessage = true;
-            }
-        }
-        
-        if (!skipMessage) {
-            // Process message
-            foxVehicleUpdateFromCANEnhanced(message.identifier, message.data, message.data_length_code);
-        }
+        // Process message immediately (event-driven)
+        foxVehicleUpdateFromCANEnhanced(message.identifier, message.data, message.data_length_code);
     }
     
     // Calculate messages per second
