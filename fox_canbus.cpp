@@ -1,33 +1,16 @@
 #include "fox_canbus.h"
 #include "fox_config.h"
-#include "fox_vehicle.h"
 #include <Arduino.h>
 
 #ifdef ESP32
 #include <driver/twai.h>
 #endif
 
-// Global variables
-bool canInitialized = false;
-bool canEnhancedMode = false;
+int tempCtrl = DEFAULT_TEMP;
+int tempMotor = DEFAULT_TEMP;
+int tempBatt = DEFAULT_TEMP;
 
-// Performance tracking
-unsigned long lastCANMessageTime = 0;
-uint32_t canMessagesProcessed = 0;
-uint32_t canMessagesPerSecond = 0;
-uint32_t canMessageCountThisSecond = 0;
-unsigned long lastSecondCheck = 0;
-int canErrorCount = 0;
-
-// Throttling control
-unsigned long canThrottleInterval = 50; // Default 20Hz
-unsigned long lastCANProcess = 0;
-
-bool foxCANInit() {
-    return foxCANInitEnhanced(); // Use enhanced by default
-}
-
-bool foxCANInitEnhanced() {
+bool initCAN() {
 #ifdef ESP32
     twai_general_config_t g_config = TWAI_GENERAL_CONFIG_DEFAULT(
         (gpio_num_t)CAN_TX_PIN,
@@ -39,117 +22,43 @@ bool foxCANInitEnhanced() {
     twai_filter_config_t f_config = TWAI_FILTER_CONFIG_ACCEPT_ALL();
 
     if (twai_driver_install(&g_config, &t_config, &f_config) != ESP_OK) {
-        Serial.println("[CAN] Failed to install driver");
-        canErrorCount++;
+        Serial.println("Gagal install CAN driver");
         return false;
     }
     
     if (twai_start() != ESP_OK) {
-        Serial.println("[CAN] Failed to start CAN bus");
-        canErrorCount++;
+        Serial.println("Gagal start CAN bus");
         return false;
     }
 
-    Serial.println("[CAN] Enhanced mode initialized (250kbps)");
-    canInitialized = true;
-    canEnhancedMode = true;
-    
-    // Reset statistics
-    lastCANMessageTime = millis();
-    canMessagesProcessed = 0;
-    canMessageCountThisSecond = 0;
-    lastSecondCheck = millis() / 1000;
-    
+    Serial.println("CAN siap");
     return true;
 #else
-    Serial.println("[CAN] Only for ESP32 platform");
+    Serial.println("CAN hanya untuk ESP32");
     return false;
 #endif
 }
 
-bool foxCANIsInitialized() {
-    return canInitialized;
-}
-
-void foxCANUpdate() {
-    foxCANUpdateEventDriven(); // Use enhanced by default
-}
-
-void foxCANUpdateEventDriven() {
+void updateCAN() {
 #ifdef ESP32
-    if (!canInitialized) return;
-    
-    unsigned long now = millis();
-    
-    // Check for CAN silence timeout
-    if (now - lastCANMessageTime > CAN_SILENCE_TIMEOUT_MS) {
-        static unsigned long lastSilenceLog = 0;
-        if (now - lastSilenceLog > 10000) { // Log every 10 seconds
-            Serial.println("[CAN] No messages for 2 seconds");
-            lastSilenceLog = now;
-        }
-    }
-    
-    // Throttle control for high message rates
-    if (now - lastCANProcess < canThrottleInterval) {
-        return;
-    }
-    
     twai_message_t message;
     
-    // Non-blocking receive with short timeout
-    if(twai_receive(&message, pdMS_TO_TICKS(1)) == ESP_OK) {
-        lastCANMessageTime = now;
-        lastCANProcess = now;
-        canMessagesProcessed++;
-        canMessageCountThisSecond++;
-        
-        // Process message immediately (event-driven)
-        foxVehicleUpdateFromCANEnhanced(message.identifier, message.data, message.data_length_code);
-    }
-    
-    // Calculate messages per second
-    unsigned long currentSecond = now / 1000;
-    if (currentSecond != lastSecondCheck) {
-        canMessagesPerSecond = canMessageCountThisSecond;
-        canMessageCountThisSecond = 0;
-        lastSecondCheck = currentSecond;
+    if(twai_receive(&message, pdMS_TO_TICKS(50)) == ESP_OK){
+        if(message.identifier == ID_CTRL_MOTOR && message.data_length_code >= 6){
+            tempCtrl = message.data[4];
+            tempMotor = message.data[5];
+        }
+        else if(message.identifier == ID_BATT_5S && message.data_length_code >= 5){
+            int maxTemp = -100;
+            for(int i = 0; i < 5; ++i){
+                if(message.data[i] > maxTemp) maxTemp = message.data[i];
+            }
+            if(maxTemp != -100) tempBatt = maxTemp;
+        }
+        else if(message.identifier == ID_BATT_SINGLE && message.data_length_code >= 6){
+            int battTemp = message.data[5];
+            if(battTemp > tempBatt) tempBatt = battTemp;
+        }
     }
 #endif
-}
-
-unsigned long foxCANGetMessageRate() {
-    return canMessagesPerSecond;
-}
-
-void foxCANSetThrottleInterval(unsigned long interval) {
-    canThrottleInterval = interval;
-    Serial.print("[CAN] Throttle interval set to ");
-    Serial.print(interval);
-    Serial.println("ms");
-}
-
-unsigned long foxCANGetLastMessageTime() {
-    return lastCANMessageTime;
-}
-
-uint32_t foxCANGetMessagesProcessed() {
-    return canMessagesProcessed;
-}
-
-void foxCANResetStatistics() {
-    canMessagesProcessed = 0;
-    canMessageCountThisSecond = 0;
-    canMessagesPerSecond = 0;
-    canErrorCount = 0;
-    lastCANMessageTime = millis();
-    Serial.println("[CAN] Statistics reset");
-}
-
-int foxCANGetErrorCount() {
-    return canErrorCount;
-}
-
-void foxCANClearErrors() {
-    canErrorCount = 0;
 }
