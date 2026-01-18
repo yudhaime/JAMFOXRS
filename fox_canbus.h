@@ -1,26 +1,13 @@
-#ifndef FOX_CANBUS_H
-#define FOX_CANBUS_H
+#ifndef CANBUS_H
+#define CANBUS_H
 
 #include <Arduino.h>
 
-// Basic CAN functions
-bool foxCANInit();
-void foxCANUpdate();
-bool foxCANIsInitialized();
+bool initCAN();
+void updateCAN();
 
-// Enhanced CAN functions (event-driven)
-bool foxCANInitEnhanced();
-void foxCANUpdateEventDriven();
-unsigned long foxCANGetMessageRate();
-void foxCANSetThrottleInterval(unsigned long interval);
-
-// Performance monitoring
-unsigned long foxCANGetLastMessageTime();
-uint32_t foxCANGetMessagesProcessed();
-void foxCANResetStatistics();
-
-// Error handling
-int foxCANGetErrorCount();
-void foxCANClearErrors();
+extern int tempCtrl;
+extern int tempMotor;
+extern int tempBatt;
 
 #endif
