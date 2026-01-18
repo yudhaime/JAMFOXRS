@@ -17,14 +17,10 @@ void foxCANSetThrottleInterval(unsigned long interval);
 // Performance monitoring
 unsigned long foxCANGetLastMessageTime();
 uint32_t foxCANGetMessagesProcessed();
-uint32_t foxCANGetSkippedMessagesCount(); // NEW: Get count of skipped messages
 void foxCANResetStatistics();
 
 // Error handling
 int foxCANGetErrorCount();
 void foxCANClearErrors();
-
-// Charging mode control
-void foxCANSetChargingMode(bool isCharging); // NEW: Set charging mode flag
 
 #endif
