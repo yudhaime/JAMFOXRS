@@ -18,11 +18,9 @@ static uint8_t decToBcd(uint8_t val) {
     return ((val / 10) << 4) | (val % 10);
 }
 
-bool foxRTCInit() {
+bool initRTC() {
     Wire.beginTransmission(DS3231_ADDRESS);
     if (Wire.endTransmission() == 0) {
-        Serial.println("RTC DS3231 terdeteksi");
-        
         // Cek jika RTC berjalan
         Wire.beginTransmission(DS3231_ADDRESS);
         Wire.write(DS3231_CONTROL_REG);
@@ -32,21 +30,19 @@ bool foxRTCInit() {
         if (Wire.available()) {
             uint8_t status = Wire.read();
             if (!(status & 0x80)) {
-                Serial.println("RTC berjalan normal");
+                // RTC berjalan normal
             } else {
-                Serial.println("RTC stopped, perlu di-set");
                 // Set dari waktu kompilasi otomatis
-                foxRTCSetFromCompileTime();
+                setRTCFromCompileTime();
             }
         }
         return true;
     }
     
-    Serial.println("DS3231 tidak terdeteksi");
     return false;
 }
 
-RTCDateTime foxRTCGetDateTime() {
+RTCDateTime getRTC() {
     RTCDateTime dt;
     
     Wire.beginTransmission(DS3231_ADDRESS);
@@ -93,9 +89,9 @@ RTCDateTime foxRTCGetDateTime() {
     return dt;
 }
 
-void foxRTCSetTime(uint16_t year, uint8_t month, uint8_t day,
-                   uint8_t hour, uint8_t minute, uint8_t second,
-                   uint8_t dayOfWeek) {
+void setRTCTime(uint16_t year, uint8_t month, uint8_t day,
+                uint8_t hour, uint8_t minute, uint8_t second,
+                uint8_t dayOfWeek) {
     
     // Convert tahun ke 2 digit
     uint8_t year2digit = year - 2000;
@@ -128,28 +124,9 @@ void foxRTCSetTime(uint16_t year, uint8_t month, uint8_t day,
     Wire.write(DS3231_CONTROL_REG);
     Wire.write(0x00);  // Clear all control bits
     Wire.endTransmission();
-    
-    // Tampilkan log
-    const char* hari[] = {"MINGGU", "SENIN", "SELASA", "RABU", 
-                          "KAMIS", "JUMAT", "SABTU"};
-    
-    Serial.print("RTC set to: ");
-    Serial.print(year);
-    Serial.print("-");
-    Serial.print(month);
-    Serial.print("-");
-    Serial.print(day);
-    Serial.print(" ");
-    Serial.print(hari[dayOfWeek - 1]);
-    Serial.print(" ");
-    Serial.print(hour);
-    Serial.print(":");
-    Serial.print(minute);
-    Serial.print(":");
-    Serial.println(second);
 }
 
-void foxRTCSetFromCompileTime() {
+void setRTCFromCompileTime() {
     // Ambil waktu dari waktu kompilasi (__DATE__ dan __TIME__)
     char monthStr[4];
     int year, month, day, hour, minute, second;
@@ -167,10 +144,10 @@ void foxRTCSetFromCompileTime() {
         }
     }
     
-    foxRTCSetTime(year, month, day, hour, minute, second, 0);
+    setRTCTime(year, month, day, hour, minute, second, 0);
 }
 
-float foxRTCGetTemperature() {
+float getTemperature() {
     Wire.beginTransmission(DS3231_ADDRESS);
     Wire.write(DS3231_TEMP_REG);
     Wire.endTransmission();
@@ -187,7 +164,7 @@ float foxRTCGetTemperature() {
     return -100.0; // Error value
 }
 
-bool foxRTCIsRunning() {
+bool isRunning() {
     Wire.beginTransmission(DS3231_ADDRESS);
     Wire.write(DS3231_CONTROL_REG);
     Wire.endTransmission();
@@ -200,8 +177,8 @@ bool foxRTCIsRunning() {
     return false;
 }
 
-String foxRTCGetTimeString(bool includeSeconds) {
-    RTCDateTime dt = foxRTCGetDateTime();
+String getTimeString(bool includeSeconds) {
+    RTCDateTime dt = getRTC();
     
     char buffer[9];
     if(includeSeconds) {
@@ -215,8 +192,8 @@ String foxRTCGetTimeString(bool includeSeconds) {
     return String(buffer);
 }
 
-String foxRTCGetDateString() {
-    RTCDateTime dt = foxRTCGetDateTime();
+String getDateString() {
+    RTCDateTime dt = getRTC();
     
     char buffer[11];
     snprintf(buffer, sizeof(buffer), "%02d/%02d/%04d", 
@@ -225,7 +202,7 @@ String foxRTCGetDateString() {
     return String(buffer);
 }
 
-bool foxRTCSetTimeFromString(String timeStr) {
+bool setTimeFromString(String timeStr) {
     // Format: HH:MM:SS atau HH:MM
     int hour, minute, second = 0;
     
@@ -248,17 +225,15 @@ bool foxRTCSetTimeFromString(String timeStr) {
     }
     
     // Ambil tanggal saat ini dari RTC
-    RTCDateTime current = foxRTCGetDateTime();
+    RTCDateTime current = getRTC();
     
     // Set waktu baru (tanggal dan hari tetap)
-    foxRTCSetTime(current.year, current.month, current.day, hour, minute, second, current.dayOfWeek);
+    setRTCTime(current.year, current.month, current.day, hour, minute, second, current.dayOfWeek);
     
-    Serial.print("Waktu di-set ke: ");
-    Serial.println(timeStr);
     return true;
 }
 
-bool foxRTCSetDateFromString(String dateStr) {
+bool setDateFromString(String dateStr) {
     // Format: DD/MM/YYYY
     int day, month, year;
     
@@ -272,54 +247,26 @@ bool foxRTCSetDateFromString(String dateStr) {
     }
     
     // Ambil waktu saat ini dari RTC
-    RTCDateTime current = foxRTCGetDateTime();
+    RTCDateTime current = getRTC();
     
     // Set tanggal baru (waktu tetap, hari tetap)
-    foxRTCSetTime(year, month, day, current.hour, current.minute, current.second, current.dayOfWeek);
+    setRTCTime(year, month, day, current.hour, current.minute, current.second, current.dayOfWeek);
     
-    Serial.print("Tanggal di-set ke: ");
-    Serial.println(dateStr);
     return true;
 }
 
-bool foxRTCSetDayOfWeek(uint8_t dayOfWeek) {
+bool setDayOfWeek(uint8_t dayOfWeek) {
     // Validasi: 1-7 (1=Minggu, 2=Senin, ..., 7=Sabtu)
     if (dayOfWeek < 1 || dayOfWeek > 7) {
         return false;
     }
     
     // Ambil waktu saat ini dari RTC
-    RTCDateTime current = foxRTCGetDateTime();
+    RTCDateTime current = getRTC();
     
     // Set waktu dengan dayOfWeek baru (tanggal & waktu tetap)
-    foxRTCSetTime(current.year, current.month, current.day, 
-                  current.hour, current.minute, current.second, dayOfWeek);
-    
-    // Tampilkan nama hari
-    const char* hari[] = {"MINGGU", "SENIN", "SELASA", "RABU", 
-                          "KAMIS", "JUMAT", "SABTU"};
-    
-    Serial.print("Hari di-set ke: ");
-    Serial.print(hari[dayOfWeek - 1]);
-    Serial.print(" (Day ");
-    Serial.print(dayOfWeek);
-    Serial.println(")");
+    setRTCTime(current.year, current.month, current.day, 
+               current.hour, current.minute, current.second, dayOfWeek);
     
     return true;
-}
-
-void foxRTCDebugPrint() {
-    RTCDateTime dt = foxRTCGetDateTime();
-    float temp = foxRTCGetTemperature();
-    
-    const char* hari[] = {"MINGGU", "SENIN", "SELASA", "RABU", 
-                          "KAMIS", "JUMAT", "SABTU"};
-    
-    Serial.println("=== RTC DEBUG INFO ===");
-    Serial.printf("Waktu: %02d:%02d:%02d\n", dt.hour, dt.minute, dt.second);
-    Serial.printf("Tanggal: %02d/%02d/%04d\n", dt.day, dt.month, dt.year);
-    Serial.printf("Hari: %s (%d)\n", hari[dt.dayOfWeek - 1], dt.dayOfWeek);
-    Serial.printf("Suhu RTC: %.1f°C\n", temp);
-    Serial.printf("RTC Running: %s\n", foxRTCIsRunning() ? "YES" : "NO");
-    Serial.println("======================");
 }
