@@ -9,7 +9,7 @@
 int currentPage = 1;
 bool setupMode = false;
 bool pageLocked = false;
-bool wasCharging = false;
+bool wasCharging = false; // Tetap ada untuk kompatibilitas, tapi tidak digunakan
 uint8_t currentSpecialMode = 0;
 int lastNormalPage = 1;
 
@@ -27,10 +27,10 @@ static unsigned long lastModeChangeTime = 0;
 static const unsigned long MODE_CHANGE_DEBOUNCE = 500;
 
 // =============================================
-// ENTER SPECIAL MODE - SIMPLE & DIRECT
+// ENTER SPECIAL MODE - HANYA UNTUK SPORT & CRUISE
 // =============================================
 void enterSpecialMode(uint8_t mode) {
-    if(mode == MODE_NORMAL) return;
+    if(mode == MODE_NORMAL) return; // Hanya cek MODE_NORMAL saja
     
     // Simpan page normal
     if(currentSpecialMode == MODE_NORMAL) {
@@ -45,9 +45,10 @@ void enterSpecialMode(uint8_t mode) {
         cruiseBlinkState = true;
         lastCruiseBlinkTime = millis();
         safeShowSpecialMode(MODE_CRUISE, true);
-    } else {
-        safeShowSpecialMode(mode, true);
+    } else if(mode == MODE_SPORT) {
+        safeShowSpecialMode(MODE_SPORT, true);
     }
+    // Tidak ada untuk mode lain (termasuk charging yang sudah dihapus)
 }
 
 // =============================================
@@ -64,7 +65,7 @@ void handleCruiseBlink() {
 }
 
 // =============================================
-// MODE DETECTION - CLEAN VERSION
+// MODE DETECTION - TANPA CHARGING
 // =============================================
 void updateModeDetection() {
     unsigned long now = millis();
@@ -74,30 +75,20 @@ void updateModeDetection() {
         return;
     }
     
-    // Dapatkan state SAAT INI
-    bool chargingNow = isCurrentlyCharging();
+    // Dapatkan state SAAT INI (HANYA SPORT & CRUISE)
     bool sportNow = isSportMode();
     bool cruiseNow = isCruiseMode();
     
-    // Tentukan mode target
+    // Tentukan mode target (HANYA SPORT, CRUISE, atau NORMAL)
     uint8_t targetMode = MODE_NORMAL;
     
-    if(chargingNow) {
-        targetMode = MODE_CHARGING;
-        wasCharging = true;
-    } 
-    else if(cruiseNow) {
+    if(cruiseNow) {
         targetMode = MODE_CRUISE;
     }
     else if(sportNow) {
         targetMode = MODE_SPORT;
     }
-    else {
-        // Normal mode
-        if(wasCharging) {
-            wasCharging = false;
-        }
-    }
+    // Tidak ada kondisi untuk charging
     
     // Jika mode berubah
     if(targetMode != currentSpecialMode) {
@@ -107,7 +98,7 @@ void updateModeDetection() {
             // Kembali ke normal
             returnToNormalMode();
         } else {
-            // Masuk special mode
+            // Masuk special mode (hanya sport/cruise)
             enterSpecialMode(targetMode);
         }
     }
@@ -119,7 +110,7 @@ void updateModeDetection() {
 }
 
 // =============================================
-// BUTTON FUNCTIONS
+// BUTTON FUNCTIONS (TETAP SAMA)
 // =============================================
 void initButton() {
     pinMode(BUTTON_PIN, INPUT_PULLUP);
@@ -196,7 +187,11 @@ void switchToPage(int page) {
 }
 
 void switchToSpecialMode(SpecialMode mode) {
+    // Jangan izinkan switching ke mode yang sudah dihapus
     if(mode == MODE_NORMAL || currentSpecialMode == mode) return;
+    
+    // Hanya izinkan sport dan cruise
+    if(mode != MODE_SPORT && mode != MODE_CRUISE) return;
     
     enterSpecialMode(mode);
 }
