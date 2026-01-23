@@ -128,31 +128,29 @@ bool readCANMessage() {
     if(twai_receive(&message, pdMS_TO_TICKS(5)) == ESP_OK) {
         vehicle.lastMessageTime = millis();
         
-        // Skip charger messages
+        // ============================================
+        // IGNORE SEMUA CHARGER MESSAGES UNTUK STABILITAS
+        // ============================================
         if(message.identifier == ID_CHARGER_FAST) {
-            return true;
+            return true; // Langsung return, abaikan pesan charger
         }
         
         // Process motor controller message
         if(message.identifier == ID_CTRL_MOTOR && message.data_length_code >= 6) {
             uint8_t modeByte = message.data[1];
-            bool chargingDetected = isChargingFromModeByte(modeByte);
             
-            // Update dengan mutex protection
+            // HAPUS DETEKSI CHARGING DARI MODE BYTE
+            // Hanya update modeByte saja
             #ifdef ESP32
             if(dataMutex != NULL) {
                 xSemaphoreTake(dataMutex, portMAX_DELAY);
-                if(chargingDetected != vehicle.isCharging) {
-                    vehicle.isCharging = chargingDetected;
-                }
                 vehicle.lastModeByte = modeByte;
+                // vehicle.isCharging = false; // Selalu false karena tidak ada mode charging
                 xSemaphoreGive(dataMutex);
             } else {
             #endif
-                if(chargingDetected != vehicle.isCharging) {
-                    vehicle.isCharging = chargingDetected;
-                }
                 vehicle.lastModeByte = modeByte;
+                // vehicle.isCharging = false;
             #ifdef ESP32
             }
             #endif
@@ -181,15 +179,11 @@ bool readCANMessage() {
             float voltage = parseVoltageFromCAN(message.data);
             float current = parseCurrentFromCAN(message.data);
             
-            // ============================================
-            // HAPUS DEADZONE DISINI - Update langsung tanpa filter
-            // ============================================
-            
-            // Update dengan mutex
+            // Update tanpa deadzone filter
             safeUpdateFloat(&vehicle.batteryVoltage, voltage);
             safeUpdateFloat(&vehicle.batteryCurrent, current);
             
-            // Tentukan apakah sedang charging berdasarkan current
+            // Tentukan apakah sedang charging berdasarkan current (hanya untuk data display)
             safeUpdateUint8((uint8_t*)&vehicle.chargingCurrent, current > 0.0f);
             
             return true;
@@ -197,7 +191,6 @@ bool readCANMessage() {
         
         // PROCESS SOC DATA
         else if(message.identifier == ID_SOC && message.data_length_code >= 2) {
-            // SOC: byte 0 dan 1 (16-bit value, big-endian)
             uint16_t socRaw = (message.data[0] << 8) | message.data[1];
             uint8_t socPercent = bmsToSOC(socRaw);
             
@@ -220,10 +213,8 @@ void updateCAN() {
 #ifdef ESP32
     static unsigned long lastProcessTime = 0;
     
-    // ============================================
-    // RATE LIMITING: 33Hz max (30ms) - LEBIH CEPAT!
-    // ============================================
-    if(millis() - lastProcessTime < 30) {  // ← dari 100ms jadi 30ms
+    // RATE LIMITING: 33Hz max (30ms)
+    if(millis() - lastProcessTime < 30) {
         return;
     }
     lastProcessTime = millis();
@@ -239,7 +230,7 @@ void updateCAN() {
         #ifdef ESP32
         if(dataMutex != NULL) {
             xSemaphoreTake(dataMutex, portMAX_DELAY);
-            vehicle.isCharging = false;
+            vehicle.isCharging = false; // Selalu false
             vehicle.lastModeByte = 0;
             vehicle.batteryVoltage = 0.0f;
             vehicle.batteryCurrent = 0.0f;
@@ -248,7 +239,7 @@ void updateCAN() {
             xSemaphoreGive(dataMutex);
         } else {
         #endif
-            vehicle.isCharging = false;
+            vehicle.isCharging = false; // Selalu false
             vehicle.lastModeByte = 0;
             vehicle.batteryVoltage = 0.0f;
             vehicle.batteryCurrent = 0.0f;
@@ -292,11 +283,8 @@ void updateCAN() {
         vehicle.lastModeByte = modes[modeIndex];
         modeIndex = (modeIndex + 1) % 4;
         
-        static bool simCharging = false;
-        if(random(0, 100) > 95) {
-            simCharging = !simCharging;
-        }
-        vehicle.isCharging = simCharging;
+        // Tidak ada simulasi charging mode
+        vehicle.isCharging = false;
         
         lastSimUpdate = millis();
     }
@@ -304,23 +292,11 @@ void updateCAN() {
 }
 
 // =============================================
-// PUBLIC GETTER FUNCTIONS - NO DEBUG
+// PUBLIC GETTER FUNCTIONS - DIMODIFIKASI
 // =============================================
 bool getChargingStatus() {
-#ifdef ESP32
-    bool status = false;
-    if(dataMutex != NULL) {
-        if(xSemaphoreTake(dataMutex, pdMS_TO_TICKS(50)) == pdTRUE) {
-            status = vehicle.isCharging;
-            xSemaphoreGive(dataMutex);
-        }
-    } else {
-        status = vehicle.isCharging;
-    }
-    return status;
-#else
-    return vehicle.isCharging;
-#endif
+    // SELALU return false karena mode charging dihapus
+    return false;
 }
 
 uint8_t getCurrentModeByte() {
@@ -347,7 +323,8 @@ bool isCutoffMode() {
 }
 
 bool isCurrentlyCharging() {
-    return getChargingStatus();
+    // SELALU false karena mode charging dihapus
+    return false;
 }
 
 int getTempCtrl() {
@@ -437,20 +414,20 @@ void getBMSDataForDisplay(float &voltage, float &current, uint8_t &soc, bool &is
             voltage = vehicle.batteryVoltage;
             current = vehicle.batteryCurrent;
             soc = vehicle.batterySOC;
-            isCharging = vehicle.chargingCurrent;
+            isCharging = vehicle.chargingCurrent; // Hanya untuk display info, bukan mode
             xSemaphoreGive(dataMutex);
         }
     } else {
         voltage = vehicle.batteryVoltage;
         current = vehicle.batteryCurrent;
         soc = vehicle.batterySOC;
-        isCharging = vehicle.chargingCurrent;
+        isCharging = vehicle.chargingCurrent; // Hanya untuk display info, bukan mode
     }
 #else
     voltage = vehicle.batteryVoltage;
     current = vehicle.batteryCurrent;
     soc = vehicle.batterySOC;
-    isCharging = vehicle.chargingCurrent;
+    isCharging = vehicle.chargingCurrent; // Hanya untuk display info, bukan mode
 #endif
 }
 
@@ -461,7 +438,7 @@ void resetCANData() {
     #ifdef ESP32
     if(dataMutex != NULL) {
         xSemaphoreTake(dataMutex, portMAX_DELAY);
-        vehicle.isCharging = false;
+        vehicle.isCharging = false; // Selalu false
         vehicle.lastModeByte = 0;
         vehicle.tempCtrl = DEFAULT_TEMP;
         vehicle.tempMotor = DEFAULT_TEMP;
@@ -474,7 +451,7 @@ void resetCANData() {
         xSemaphoreGive(dataMutex);
     } else {
     #endif
-        vehicle.isCharging = false;
+        vehicle.isCharging = false; // Selalu false
         vehicle.lastModeByte = 0;
         vehicle.tempCtrl = DEFAULT_TEMP;
         vehicle.tempMotor = DEFAULT_TEMP;
