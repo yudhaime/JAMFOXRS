@@ -4,22 +4,22 @@
 #include <Arduino.h>
 
 // =============================================
-// PAGE & MODE MANAGEMENT
+// PAGE & MODE MANAGEMENT (TANPA CHARGING)
 // =============================================
 
-// Mode types
+// Mode types - HANYA SPORT & CRUISE
 typedef enum {
     MODE_NORMAL = 0,
     MODE_SPORT = 1,
     MODE_CRUISE = 2,
-    MODE_CHARGING = 3
+    // MODE_CHARGING = 3  // DIHAPUS
 } SpecialMode;
 
 // Global variables
 extern int currentPage;
 extern bool setupMode;
 extern bool pageLocked;
-extern bool wasCharging;
+extern bool wasCharging; // Masih ada untuk kompatibilitas
 extern uint8_t currentSpecialMode;
 extern int lastNormalPage;
 
