@@ -1,255 +1,279 @@
-#ifndef FOX_CONFIG_H
-#define FOX_CONFIG_H
+#ifndef CONFIG_H
+#define CONFIG_H
 
 // =============================================
-// KONFIGURASI UMUM
+// DOIT DevKit V1 SPECIFIC CONFIG
 // =============================================
 
-// Hardware Pin Configuration
-#define SDA_PIN 16
-#define SCL_PIN 17
-#define BUTTON_PIN 25
-#define CAN_TX_PIN 22
-#define CAN_RX_PIN 21
-#define DEBOUNCE_DELAY 50
-
-// OLED Display Configuration
+// OLED Display (GPIO16/17 di DOIT)
 #define SCREEN_WIDTH 128
 #define SCREEN_HEIGHT 32
-#define OLED_ADDRESS 0x3C
+#define SDA_PIN 16    // DOIT: GPIO16
+#define SCL_PIN 17    // DOIT: GPIO17
+#define OLED_ADDRESS 0x3C  // Coba 0x3D jika tidak work
 
-// CAN Bus Configuration
+// =============================================
+// CAN UPDATE RATE CONFIGURATION (BARU)
+// =============================================
+
+// CAN Update Rate untuk responsivitas (ms)
+// 100ms = 10Hz (default, stabil)
+// 50ms  = 20Hz (lebih responsif) 
+// 30ms  = 33Hz (paling responsif - RECOMMENDED)
+#define CAN_UPDATE_RATE_FAST_MS 30
+
+// Current Display Deadzone (A) - filtering di display level
+#define CURRENT_DISPLAY_DEADZONE 0.1f  // 0.1A deadzone di display
+
+// =============================================
+// SPLASH SCREEN CONFIGURATION
+// =============================================
+#define SPLASH_TEXT "WELCOME"
+#define SPLASH_DURATION_MS 1500
+
+// Pilihan font untuk splash screen:
+// 0: Default font (6x8) - KECIL
+// 1: FreeSansBold9pt7b  - SEDANG  
+// 2: FreeSansBold12pt7b - BESAR (default sebelumnya)
+#define SPLASH_FONT_SIZE 1  // REKOMENDASI: 1 (sedang)
+
+// Position configuration
+#define SPLASH_POS_X 0      // 0 = auto-center, atau nilai spesifik
+#define SPLASH_POS_Y 20     // Y position untuk splash text
+
+// Font width approximations (dalam pixels)
+#define FONT_WIDTH_DEFAULT  6    // Default font 6x8
+#define FONT_WIDTH_9PT     18    // FreeSansBold9pt7b approx width
+#define FONT_WIDTH_12PT    24    // FreeSansBold12pt7b approx width
+
+// =============================================
+// PAGE CONFIGURATION
+// =============================================
+#define PAGE_1_ENABLE true     // Page 1: Clock
+#define PAGE_2_ENABLE true     // Page 2: Temperature
+#define PAGE_3_ENABLE false     // Page 3: Voltage & Current (Masih BETA tidak responsif)
+#define PAGE_SPECIAL_ID 10     // Page untuk semua mode khusus (Sport/Cruise/Charging)
+
+// =============================================
+// DAY & MONTH CONFIGURATION
+// =============================================
+
+// Array nama hari (1=Minggu, 7=Sabtu)
+static const char* DAY_NAMES[] = {
+    "MINGGU", "SENIN", "SELASA", "RABU", 
+    "KAMIS", "JUMAT", "SABTU"
+};
+
+// Array nama bulan singkat (1=Jan, 12=Des)
+static const char* MONTH_NAMES[] = {
+    "JAN", "FEB", "MAR", "APR", "MEI", "JUN", 
+    "JUL", "AGU", "SEP", "OKT", "NOV", "DES"
+};
+
+// =============================================
+// BUTTON CONFIGURATION (OPTIMIZED)
+// =============================================
+#define BUTTON_PIN 25
+#define DEBOUNCE_DELAY 20        // Reduced from 100ms for faster response
+#define BUTTON_COOLDOWN_MS 200   // Minimum time between presses
+#define BUTTON_LONG_PRESS_MS 800 // For future long-press features
+
+// =============================================
+// CAN BUS CONFIGURATION
+// =============================================
+#define CAN_TX_PIN 22
+#define CAN_RX_PIN 21
 #define CAN_BAUDRATE 250000
-#define CAN_MODE 1  // TWAI_MODE_LISTEN_ONLY
 
-// RTC Configuration
+// ID Pesan CAN
+#define ID_CTRL_MOTOR   0x0A010810UL
+#define ID_BATT_5S      0x0E6C0D09UL
+#define ID_BATT_SINGLE  0x0A010A10UL
+#define ID_CHARGER_FAST 0x10261041UL
+#define ID_VOLTAGE_CURRENT  0x0A6D0D09UL  // Gabungan voltage dan current
+#define ID_SOC              0x0A6E0D09UL  // Persentase baterai atau State of Charge
+
+// =============================================
+// BMS CONFIGURATION (NEW)
+// =============================================
+#define BMS_VOLTAGE_RESOLUTION 0.1f    // 0.1V per bit
+#define BMS_CURRENT_RESOLUTION 0.1f    // 0.1A per bit
+#define BMS_SIGN_BIT 7                 // Bit 7 sebagai sign bit
+
+// Titik-titik kunci mapping BMS value -> SOC %
+#define SOC_KEY_POINTS_COUNT 7
+
+// =============================================
+// TEMPERATURE CONFIGURATION
+// =============================================
+#define DEFAULT_TEMP 25
+#define DATA_TIMEOUT 10000
+
+// =============================================
+// RTC CONFIGURATION
+// =============================================
 #define RTC_I2C_ADDRESS 0x68
 
 // =============================================
-// PAGE CONFIGURATION SYSTEM
+// DISPLAY TEXT CONFIGURATION
 // =============================================
+#define CLOCK_TIME_FORMAT "%02d:%02d"
+#define CLOCK_DATE_FORMAT "%d %s"
+#define CLOCK_YEAR_FORMAT "%04d"
 
-// Enable/disable pages (true/false)
-#define PAGE_CLOCK_ENABLED     true    // Page 1: Clock
-#define PAGE_TEMP_ENABLED      true    // Page 2: Temperature  
-#define PAGE_ELECTRICAL_ENABLED true  // Page 3: Electrical (currently disabled)
-// Page 9 (Sport) is always enabled for automatic mode switching
+#define TEMP_LABEL_ECU "ECU"
+#define TEMP_LABEL_MOTOR "MOTOR"
+#define TEMP_LABEL_BATT "BATT"
 
-// Maximum number of user pages (excluding sport page)
-#if PAGE_CLOCK_ENABLED && PAGE_TEMP_ENABLED && PAGE_ELECTRICAL_ENABLED
-  #define MAX_USER_PAGES 3
-#elif (PAGE_CLOCK_ENABLED && PAGE_TEMP_ENABLED) || \
-      (PAGE_CLOCK_ENABLED && PAGE_ELECTRICAL_ENABLED) || \
-      (PAGE_TEMP_ENABLED && PAGE_ELECTRICAL_ENABLED)
-  #define MAX_USER_PAGES 2
-#elif PAGE_CLOCK_ENABLED || PAGE_TEMP_ENABLED || PAGE_ELECTRICAL_ENABLED
-  #define MAX_USER_PAGES 1
-#else
-  #define MAX_USER_PAGES 0
-#endif
+// TAMBAHKAN LABEL UNTUK PAGE 3 (BMS DATA) - DIPERBAIKI
+#define BMS_LABEL_VOLTAGE "VOLT"
+#define BMS_LABEL_CURRENT "ARUS"
+
+#define SETUP_TEXT "SETUP"
+#define SETUP_TIMEOUT_MS 30000
+
+#define CHARGING_TEXT "LOCKED"
+#define SPORT_TEXT "SPORT"
+#define CRUISE_TEXT "CRUISE"
+#define BLINK_INTERVAL_MS 500  // Interval kedipan untuk CRUISE
+
+#define CHARGING_PAGE PAGE_SPECIAL_ID  // Semua mode khusus pakai page 10
+
+// Durasi sebelum kembali ke page normal (RESPONSIF - diubah dari 30 detik)
+#define AUTO_MODE_TIMEOUT_MS 5000  // 5 detik - lebih responsif
 
 // =============================================
-// KONFIGURASI VEHICLE
+// VEHICLE MODE BYTE VALUES - DIPERBARUI
 // =============================================
-
-// Vehicle Mode Byte Values
 #define MODE_BYTE_PARK 0x00
 #define MODE_BYTE_DRIVE 0x70
-#define MODE_BYTE_SPORT 0xB0
-#define MODE_BYTE_CRUISE 0x74
-#define MODE_BYTE_SPORT_CRUISE 0xB4
-#define MODE_BYTE_CUTOFF_1 0xB2
-#define MODE_BYTE_CUTOFF_2 0x72
+#define MODE_BYTE_SPORT 0xB0          // Sport mode normal
+#define MODE_BYTE_CRUISE 0x74         // Cruise mode normal
+#define MODE_BYTE_SPORT_CRUISE 0xB4   // Sport + Cruise
+#define MODE_BYTE_CUTOFF_DRIVE 0x72   // Cutoff + Drive (BUKAN sport!)
+#define MODE_BYTE_CUTOFF_SPORT 0xB2   // Cutoff + Sport (MASIH sport mode!)
 #define MODE_BYTE_STANDBY_1 0x78
 #define MODE_BYTE_STANDBY_2 0x08
 #define MODE_BYTE_STANDBY_3 0xB8
 #define MODE_BYTE_CHARGING_1 0x61
 #define MODE_BYTE_CHARGING_2 0xA1
 #define MODE_BYTE_CHARGING_3 0xA9
-#define MODE_BYTE_CHARGING_4 0x69  // Charging dengan side stand
+#define MODE_BYTE_CHARGING_4 0x69
 #define MODE_BYTE_REVERSE 0x50
 #define MODE_BYTE_NEUTRAL 0x40
 
-// Macro untuk deteksi semua charging modes
+// =============================================
+// MODE DETECTION MACROS - DIPERBARUI
+// =============================================
 #define IS_CHARGING_MODE(b) ((b) == MODE_BYTE_CHARGING_1 || \
                              (b) == MODE_BYTE_CHARGING_2 || \
                              (b) == MODE_BYTE_CHARGING_3 || \
                              (b) == MODE_BYTE_CHARGING_4)
 
-// Macro untuk deteksi semua known modes
-#define IS_KNOWN_MODE(b) ((b) == MODE_BYTE_PARK || \
-                          (b) == MODE_BYTE_DRIVE || \
-                          (b) == MODE_BYTE_SPORT || \
-                          (b) == MODE_BYTE_CRUISE || \
-                          (b) == MODE_BYTE_SPORT_CRUISE || \
-                          (b) == MODE_BYTE_CUTOFF_1 || \
-                          (b) == MODE_BYTE_CUTOFF_2 || \
-                          (b) == MODE_BYTE_STANDBY_1 || \
-                          (b) == MODE_BYTE_STANDBY_2 || \
-                          (b) == MODE_BYTE_STANDBY_3 || \
-                          (b) == MODE_BYTE_REVERSE || \
-                          (b) == MODE_BYTE_NEUTRAL || \
-                          IS_CHARGING_MODE(b))
+// PERUBAHAN: Hapus SPORT_CRUISE dari sport mode
+// Sport mode HANYA 0xB0 dan 0xB2
+#define IS_SPORT_MODE(b) ((b) == MODE_BYTE_SPORT || \
+                         (b) == MODE_BYTE_CUTOFF_SPORT)
 
-// Speed Configuration
-#define SPEED_TRIGGER_SPORT_PAGE 80  // Speed untuk trigger mode page sport (km/h)
-#define RPM_TO_KMPH_FACTOR 0.1033    // RPM * 0.1033 = km/h
-#define DEFAULT_TEMP 25
-#define DATA_TIMEOUT_MS 10000
+// PERUBAHAN: Cruise mode termasuk 0xB4 (SPORT+CRUISE dianggap cruise saja)
+#define IS_CRUISE_MODE(b) ((b) == MODE_BYTE_CRUISE || \
+                          (b) == MODE_BYTE_SPORT_CRUISE)  // 0xB4 dianggap cruise
+
+#define IS_CUTOFF_MODE(b) ((b) == MODE_BYTE_CUTOFF_DRIVE || \
+                          (b) == MODE_BYTE_CUTOFF_SPORT)
+
+#define IS_DRIVING_MODE(b) ((b) == MODE_BYTE_DRIVE || \
+                           (b) == MODE_BYTE_SPORT || \
+                           (b) == MODE_BYTE_CRUISE || \
+                           (b) == MODE_BYTE_SPORT_CRUISE || \
+                           (b) == MODE_BYTE_CUTOFF_DRIVE || \
+                           (b) == MODE_BYTE_CUTOFF_SPORT)
 
 // =============================================
-// KONFIGURASI DISPLAY TEXT
+// DISPLAY POSITION CONFIGURATION (NEW)
 // =============================================
 
-// Splash Screen Configuration
-#define SPLASH_TEXT "WELCOME"       // Ganti tulisan saat kendaraan pertama kali dinyalakan
-#define SPLASH_DURATION_MS 1500     // Durasi tulisan awal satuan ms atau milidetik
+// Splash Screen Position
+#define SPLASH_POS_X 0      // 0 = auto-center, atau nilai spesifik
+#define SPLASH_POS_Y 20     // Y position untuk splash text
 
-// Page 1: Clock Configuration
-#define CLOCK_TIME_FORMAT "%02d:%02d"
-#define CLOCK_DATE_FORMAT "%d %s"
-#define CLOCK_YEAR_FORMAT "%04d"
+// Special Modes Position (Sport/Cruise/Charging)
+#define SPECIAL_MODE_POS_X 10   // 0 = auto-center
+#define SPECIAL_MODE_POS_Y 20  // Y position untuk mode text
 
-// Page 2: Temperature Configuration
-#define TEMP_LABEL_ECU "ECU"       // Label tulisan di atas suhu controller
-#define TEMP_LABEL_MOTOR "MOTOR"   // Label tulisan di atas suhu bldc dinamo motor
-#define TEMP_LABEL_BATT "BATT"     // Label tulisan di atas suhu baterai
+// Setup Mode Position
+#define SETUP_MODE_POS_X 0     // 0 = auto-center  
+#define SETUP_MODE_POS_Y 20    // Y position untuk setup text
 
-// Page 3: Electrical Configuration
-#define ELECTRICAL_LABEL_VOLT "VOLT"
-#define ELECTRICAL_LABEL_CURR "CURR"
+// Page 1: Clock Positions
+#define CLOCK_TIME_POS_X 0     // Jam besar (kiri)
+#define CLOCK_TIME_POS_Y 28
+#define CLOCK_DATE_POS_X 88    // Tanggal (kanan)
+#define CLOCK_DATE_POS_Y 5
+#define CLOCK_DAY_POS_X 88     // Hari (kanan)
+#define CLOCK_DAY_POS_Y 15
+#define CLOCK_YEAR_POS_X 88    // Tahun (kanan)
+#define CLOCK_YEAR_POS_Y 25
 
-// Page 9: Sport Mode Configuration
-#define SPORT_TEXT "SPORT"         // Tulisan ketika masuk mode Sport
-#define CRUISE_TEXT "CRUISE"       // Tulisan ketika Cruise Control aktif
-#define SPORT_MODE_LABEL "SPORT MODE"  // Tulisan kecil ketika kecepatan mulai melewati batas
-#define KMH_TEXT "km/h"
-#define RPM_TEXT "rpm"
+// Page 2: Temperature Positions
+#define TEMP_LABEL_ECU_POS_X 0
+#define TEMP_LABEL_ECU_POS_Y 4
+#define TEMP_LABEL_MOTOR_POS_X 43
+#define TEMP_LABEL_MOTOR_POS_Y 4
+#define TEMP_LABEL_BATT_POS_X 86
+#define TEMP_LABEL_BATT_POS_Y 4
+#define TEMP_VALUE_ECU_POS_X 0
+#define TEMP_VALUE_ECU_POS_Y 16
+#define TEMP_VALUE_MOTOR_POS_X 43
+#define TEMP_VALUE_MOTOR_POS_Y 16
+#define TEMP_VALUE_BATT_POS_X 86
+#define TEMP_VALUE_BATT_POS_Y 16
 
-// Charging Mode Configuration
-#define CHARGING_TEXT "CHARGING"
+// Page 3: BMS Data Positions - RESPONSIF VERSION
+#define BMS_LABEL_VOLTAGE_POS_X 0
+#define BMS_LABEL_VOLTAGE_POS_Y 4
+#define BMS_LABEL_CURRENT_POS_X 86
+#define BMS_LABEL_CURRENT_POS_Y 4
+#define BMS_VALUE_VOLTAGE_POS_X 0
+#define BMS_VALUE_VOLTAGE_POS_Y 16
+#define BMS_VALUE_CURRENT_POS_X 75
+#define BMS_VALUE_CURRENT_POS_Y 16
 
-// Setup Mode Configuration
-#define SETUP_TEXT "SETUP"
-#define SETUP_TIMEOUT_MS 30000
-
-// =============================================
-// KONFIGURASI CAN BUS ID
-// =============================================
-
-// CAN IDs untuk Fox EV
-#define FOX_CAN_MODE_STATUS   0x0A010810UL  // Mode kendaraan + RPM + suhu
-#define FOX_CAN_TEMP_CTRL_MOT 0x0A010A10UL  // Speed & suhu
-#define FOX_CAN_TEMP_BATT_5S  0x0E6C0D09UL  // Suhu baterai 5 cell
-#define FOX_CAN_TEMP_BATT_SGL 0x0A010A11UL  // Suhu baterai single
-
-// CAN IDs untuk data performa (dokumen Votol)
-#define FOX_CAN_VOLTAGE       0x0A6D0D09UL  // Tegangan baterai
-#define FOX_CAN_SOC           0x0A6E0D09UL  // Persentase baterai atau State of Charge (%)
-//#define FOX_CAN_CURRENT       0x0A6F0D09UL  // Arus (Current) //salah jadi saya hapus karena voltase dan current ada di satu message
-#define FOX_CAN_VOLTAGE_CURRENT 0x0A6D0D09UL  // Gabungan voltage dan current
-
-// CAN IDs untuk charger (filter)
-#define FOX_CAN_CHARGER_1 0x1810D0F3UL  // Contoh ID charger 1
-#define FOX_CAN_CHARGER_2 0x1811D0F3UL  // Contoh ID charger 2
-#define FOX_CAN_BMS_INFO  0x0A010C10UL  // BMS info message
+// Special Mode Indicator Positions (kecil di pojok) - TIDAK DIPAKAI LAGI
+//#define MODE_INDICATOR_POS_X 120  // Pojok kanan atas
+//#define MODE_INDICATOR_POS_Y 0
 
 // =============================================
-// OPTIMIZATION CONFIGURATION
+// FREERTOS CONFIGURATION (OPTIMIZED FOR STABILITY)
 // =============================================
+#define I2C_RETRY_COUNT 3
+#define I2C_RETRY_DELAY_MS 5
+#define I2C_MUTEX_TIMEOUT_MS 100
+#define DATA_MUTEX_TIMEOUT_MS 50
+#define CAN_PAUSE_DURING_I2C_MS 2
 
-// Smart Display Update Thresholds
-#define CURRENT_UPDATE_THRESHOLD 0.1     // 0.1A change triggers update
-#define VOLTAGE_UPDATE_THRESHOLD 0.5     // 0.5V change triggers update
-#define SPEED_UPDATE_THRESHOLD 1         // 1 km/h change triggers update
-#define TEMP_UPDATE_THRESHOLD 1          // 1°C change triggers update
-#define SOC_UPDATE_THRESHOLD 1           // 1% change triggers update
+// Task priorities (Reduced for stability)
+#define TASK_PRIORITY_DISPLAY   3  // Reduced from 4
+#define TASK_PRIORITY_CAN       2
+#define TASK_PRIORITY_SERIAL    1
+#define TASK_PRIORITY_DEBUG     0
 
-// Update Intervals (Event-Driven + Fallback)
-#define UPDATE_INTERVAL_CRITICAL_MS 100   // Current, Speed, RPM
-#define UPDATE_INTERVAL_HIGH_MS 250       // Voltage
-#define UPDATE_INTERVAL_MEDIUM_MS 500     // Temperatures
-#define UPDATE_INTERVAL_LOW_MS 1000       // Clock, SOC
-#define UPDATE_INTERVAL_SPORT_MS 50       // Sport page
-#define UPDATE_INTERVAL_SETUP_MS 500      // Setup mode blink
-#define UPDATE_INTERVAL_CHARGING_MS 5000  // Charging mode
+// Stack sizes (INCREASED FOR STABILITY)
+#define STACK_SIZE_DISPLAY      4096  // Increased from 3072
+#define STACK_SIZE_CAN          4096  // Increased from 3072
+#define STACK_SIZE_SERIAL       3072  // Increased from 2048
+#define STACK_SIZE_DEBUG        2048  // Increased from 1024
 
-// Watchdog Timeouts
-#define DISPLAY_WATCHDOG_TIMEOUT_MS 500   // Display update timeout
-#define I2C_WATCHDOG_TIMEOUT_MS 300       // I2C communication timeout
-#define CAN_SILENCE_TIMEOUT_MS 2000       // CAN bus silence timeout
+// Core affinity
+#define CORE_DISPLAY            0
+#define CORE_CAN                1
+#define CORE_SERIAL             0
+#define CORE_DEBUG              1
 
-// Debug Configuration
-#define DEBUG_INTERVAL_MS 10000
-#define BLINK_INTERVAL_MS 500
-
-// Font Size Configuration
-#define FONT_SIZE_SMALL 1
-#define FONT_SIZE_MEDIUM 2
-#define FONT_SIZE_LARGE 3
-
-// BMS Configuration
-#define BMS_DEADZONE_CURRENT 0.1          // Deadzone 0.1A
-#define BMS_UPDATE_THRESHOLD_VOLTAGE 0.1  // 0.1V perubahan
-#define BMS_UPDATE_THRESHOLD_CURRENT 0.5  // 0.5A perubahan
-
-// Position Configuration
-#define POS_TOP 0
-#define POS_MIDDLE 12
-#define POS_BOTTOM 25
-
-// Data freshness timeout
-#define DATA_FRESH_TIMEOUT_MS 5000
-
-// =============================================
-// ENUM & STRUCTURE DEFINITIONS
-// =============================================
-
-// Vehicle Mode Enumeration
-enum FoxVehicleMode {
-    MODE_UNKNOWN = 0,
-    MODE_PARK,
-    MODE_DRIVE,
-    MODE_SPORT,
-    MODE_CUTOFF,
-    MODE_STANDBY,
-    MODE_REVERSE,
-    MODE_NEUTRAL,
-    MODE_CRUISE,
-    MODE_SPORT_CRUISE,
-    MODE_CHARGING
-};
-
-// Display Pages Enumeration - Decimal Jump System
-enum DisplayPage {
-    PAGE_CLOCK = 1,      // User page 1: Jam & Tanggal
-    PAGE_TEMP = 2,       // User page 2: Suhu
-    PAGE_ELECTRICAL = 3, // User page 3: Voltage & Current
-    PAGE_SPORT = 9       // Hidden page: Sport Mode (auto-trigger only)
-};
-
-// Display Update Priority (for smart updates)
-enum DisplayPriority {
-    PRIORITY_CRITICAL = 0,   // Current, Speed, RPM (< 100ms)
-    PRIORITY_HIGH = 1,       // Voltage (< 250ms)
-    PRIORITY_MEDIUM = 2,     // Temperatures (< 500ms)
-    PRIORITY_LOW = 3         // Clock, SOC, Static text (< 1000ms)
-};
-
-// Display Zones for partial updates
-enum DisplayZone {
-    ZONE_NONE = 0,
-    ZONE_CLOCK_TIME,
-    ZONE_CLOCK_DATE,
-    ZONE_TEMP_ECU,
-    ZONE_TEMP_MOTOR,
-    ZONE_TEMP_BATT,
-    ZONE_VOLTAGE,
-    ZONE_CURRENT,
-    ZONE_SPEED,
-    ZONE_RPM,
-    ZONE_SOC,
-    ZONE_MODE_TEXT
-};
+// Task update rates (SLOWED DOWN FOR STABILITY)
+#define DISPLAY_UPDATE_RATE_MS  50     // Reduced from 20ms to 50ms (20Hz)
+#define CAN_UPDATE_RATE_MS      20     // Reduced from 10ms to 20ms (50Hz)
+#define SERIAL_UPDATE_RATE_MS   100    // Reduced from 50ms to 100ms (10Hz)
+#define DEBUG_UPDATE_RATE_MS    30000  // Increased from 10s to 30s
 
 #endif
