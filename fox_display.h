@@ -1,72 +1,26 @@
-#ifndef FOX_DISPLAY_H
-#define FOX_DISPLAY_H
+#ifndef DISPLAY_H
+#define DISPLAY_H
 
 #include <Arduino.h>
-#include "fox_config.h" 
 
-// Forward declaration
-struct FoxVehicleData;
+// Basic display functions
+void initDisplay();
+void updateDisplay(int page);
+void showSetupMode(bool blinkState);
+void resetDisplay();
 
-// =============================================
-// DISPLAY INITIALIZATION & CONTROL
-// =============================================
+// Thread-safe display functions
+bool safeDisplayUpdate(int page);
 
-// Basic initialization
-void foxDisplayInit();
-bool foxDisplayIsInitialized();
+// SPECIAL MODE DISPLAY FUNCTIONS
+void updateSpecialModeDisplay(uint8_t modeType, bool blinkState = false);
+bool safeShowSpecialMode(uint8_t modeType, bool blinkState = false);
 
-// Enhanced initialization with watchdog
-void foxDisplayInitEnhanced();
-void foxDisplayWatchdogCheck();
+// Display status
+extern bool displayReady;
 
-// Smart update system
-void foxDisplayUpdateSmart(int page, bool forceFullUpdate);
-void foxDisplayForceUpdate();
-void foxDisplayForceSportUpdate();
-bool foxDisplayCheckUpdateNeeded(const FoxVehicleData& vehicleData);
-
-// Special modes
-void foxDisplayShowSetupMode(bool blinkState);
-void foxDisplayUpdateChargingMode();
-void foxDisplayUpdateCruiseMode(bool blinkState);  // TAMBAH INI
-
-// Performance monitoring
-int foxDisplayGetSmartUpdateCount();
-int foxDisplayGetFallbackUpdateCount();
-int foxDisplayGetSmartUpdateSuccessRate();
-
-// I2C error handling
-void recoverI2C();
-int getI2CErrorCount();
-unsigned long getLastI2CErrorTime();
-
-// =============================================
-// INTERNAL FUNCTIONS (untuk fox_display.cpp)
-// =============================================
-
-// Page display functions
-void displayPageClock(bool forceFull);
-void displayPageTemperature(const FoxVehicleData& vehicleData, bool forceFull);
-void displayPageElectrical(const FoxVehicleData& vehicleData, bool forceFull);
-void displayPageSport(const FoxVehicleData& vehicleData, bool forceFull);
-
-// Partial update functions
-void updateClockPartial();
-void updateCurrentPartial(float current);
-void updateVoltagePartial(float voltage);
-void updateSpeedPartial(uint16_t speed);
-void updateTemperaturePartial(uint8_t tempCtrl, uint8_t tempMotor, uint8_t tempBatt);
-
-// Sport page helper functions
-void updateBlinkState();
-void displayCruiseMode();
-void displaySportModeLowSpeed();
-void displaySportModeHighSpeed(uint16_t speedKmh);
-
-// Zone management
-void markZoneDirty(DisplayZone zone);
-void clearAllZonesDirty();
-bool isAnyZoneDirty();
-void updateDirtyZones(const FoxVehicleData& vehicleData);
+// Helper untuk FreeRTOS
+bool safeI2COperation(uint32_t timeoutMs);  // Internal use
+void releaseI2C();                          // Internal use
 
 #endif
