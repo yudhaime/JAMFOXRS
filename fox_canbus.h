@@ -1,26 +1,39 @@
-#ifndef FOX_CANBUS_H
-#define FOX_CANBUS_H
+#ifndef CANBUS_H
+#define CANBUS_H
 
 #include <Arduino.h>
 
-// Basic CAN functions
-bool foxCANInit();
-void foxCANUpdate();
-bool foxCANIsInitialized();
+// Inisialisasi dan update
+bool initCAN();
+void updateCAN();
+void resetCANData();
 
-// Enhanced CAN functions (event-driven)
-bool foxCANInitEnhanced();
-void foxCANUpdateEventDriven();
-unsigned long foxCANGetMessageRate();
-void foxCANSetThrottleInterval(unsigned long interval);
+// Getter functions
+bool getChargingStatus();
+uint8_t getCurrentModeByte();
+bool isCurrentlyCharging();
 
-// Performance monitoring
-unsigned long foxCANGetLastMessageTime();
-uint32_t foxCANGetMessagesProcessed();
-void foxCANResetStatistics();
+// Temperature getters
+int getTempCtrl();
+int getTempMotor();
+int getTempBatt();
 
-// Error handling
-int foxCANGetErrorCount();
-void foxCANClearErrors();
+// Mode detection
+uint8_t getCurrentVehicleMode();
+bool isSportMode();
+bool isCruiseMode();
+bool isCutoffMode();
+
+// BMS DATA GETTERS
+float getBatteryVoltage();
+float getBatteryCurrent();
+uint8_t getBatterySOC();
+bool isChargingCurrent();
+
+// Data access untuk display
+void getBMSDataForDisplay(float &voltage, float &current, uint8_t &soc, bool &isCharging);
+
+// Debug
+void printModeDebugInfo();
 
 #endif
