@@ -169,7 +169,7 @@ void resetDisplayState() {
 }
 
 // =============================================
-// SPECIAL MODE DISPLAY FUNCTION - CLEAN VERSION (TANPA INDIKATOR)
+// SPECIAL MODE DISPLAY FUNCTION - HANYA SPORT & CRUISE
 // =============================================
 void updateSpecialModeDisplay(uint8_t modeType, bool blinkState) {
     if(!displayInitialized) return;
@@ -182,7 +182,7 @@ void updateSpecialModeDisplay(uint8_t modeType, bool blinkState) {
     
     const char* displayText = "";
     
-    // Tentukan teks berdasarkan mode
+    // Tentukan teks berdasarkan mode (HANYA SPORT & CRUISE)
     switch(modeType) {
         case 1: // Sport Mode
             displayText = SPORT_TEXT;
@@ -195,12 +195,11 @@ void updateSpecialModeDisplay(uint8_t modeType, bool blinkState) {
             }
             displayText = CRUISE_TEXT;
             break;
-        case 3: // Charging Mode
-            displayText = CHARGING_TEXT;
-            break;
+        // TIDAK ADA CASE UNTUK CHARGING MODE LAGI
         default:
-            displayText = "MODE";
-            break;
+            // Untuk mode lain (termasuk charging), tampilkan kosong dan return
+            display.display();
+            return;
     }
     
     // GUNAKAN FONT BESAR UNTUK SPECIAL MODE (12pt)
@@ -228,6 +227,9 @@ void updateSpecialModeDisplay(uint8_t modeType, bool blinkState) {
 // =============================================
 bool safeShowSpecialMode(uint8_t modeType, bool blinkState) {
     if(!displayInitialized || !displayReady) return false;
+    
+    // Jika modeType bukan sport atau cruise, langsung return false
+    if(modeType != 1 && modeType != 2) return false;
     
     if(!safeI2COperation(I2C_MUTEX_TIMEOUT_MS)) {
         return false;
@@ -389,6 +391,7 @@ void updateDisplay(int page) {
         
     } else if(page == PAGE_SPECIAL_ID) {
         // Page khusus akan ditangani di main loop
+        // Untuk charging, sekarang tetap tampilkan page normal
         resetDisplayState(); // Reset state
         display.display();
     } else {
