@@ -223,15 +223,21 @@ Pilih: ESP32 Dev Module
 
 ```JAMFOXRSV1
 ├── JAMFOXRSV1.ino          # Main sketch
-├── fox_config.h            # Konfigurasi pin dan parameter
-├── fox_display.h           # Header display
-├── fox_display.cpp         # Implementasi display
 ├── fox_canbus.h            # Header CAN bus
 ├── fox_canbus.cpp          # Implementasi CAN bus
-├── fox_vehicle.h           # Header vehicle data
-├── fox_vehicle.cpp         # Implementasi vehicle data
-├── fox_rtc.h              # Header RTC
-└── fox_rtc.cpp            # Implementasi RTC
+├── fox_config.h            # Konfigurasi pin, label teks, posisi teks, dll
+├── fox_display.h           # Header display
+├── fox_display.cpp         # Implementasi display
+├── fox_page.h              # Header page display
+├── fox_page.cpp.h          # Implementasi sistem page
+├── fox_rtc.h               # Header RTC
+├── fox_rtc.cpp             # Implementasi RTC
+├── fox_serial.h            # Header serial command
+├── fox_serial.cpp          # Implementasi command serial
+├── fox_task.h              # Header task
+├── fox_task.cpp            # Implementasi pembagian tugas prosesor
+├── fox_vehicle.cpp         # Parsing message canbus
+└── fox_vehicle.h           # Header vehicle data
 ```
 
 
@@ -267,14 +273,6 @@ HELP          - Show this help
 DAY [1-7]     - Set day of week (1=Minggu, 7=SABTU)
 TIME HH:MM:SS - Set time (24h format)
 DATE DD/MM/YYYY - Set date
-DEBUG         - Show RTC info
-DEBUG ON/OFF  - Enable/disable periodic debug
-SETUP         - Enter setup mode
-SAVE          - Exit setup mode
-PAGE [1|2]    - Switch display page
-VEHICLE       - Show vehicle data
-CAPTURE ON    - Enable unknown CAN ID capture
-CAPTURE OFF   - Disable unknown CAN ID capture
 ==========================
 Day mapping: 1=MINGGU, 2=SENIN, 3=SELASA,
              4=RABU, 5=KAMIS, 6=JUMAT, 7=SABTU
