@@ -132,7 +132,6 @@ static const char* MONTH_NAMES[] = {
 #define SETUP_TEXT "SETUP"
 #define SETUP_TIMEOUT_MS 30000
 
-#define CHARGING_TEXT "LOCKED"
 #define SPORT_TEXT "SPORT"
 #define CRUISE_TEXT "CRUISE"
 #define BLINK_INTERVAL_MS 500  // Interval kedipan untuk CRUISE
