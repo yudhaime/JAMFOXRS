@@ -3,14 +3,14 @@
 
 Display jam untuk motor listrik Polytron Fox R/S disertai display suhu kendaraan secara realtime
 
-## DONASI
+## 💰 DONASI
 
 Jika kode ini membantu mungkin sedikit donasi akan sangat saya hargai
 
 [![Donate](https://cdn-icons-png.flaticon.com/256/5002/5002279.png)](https://saweria.co/yudhaisme)
 
 
-## Features
+## 🧩 Features
 
 - Menampilkan jam
 - Menampilkan suhu controller, bldc, dan baterai
@@ -19,7 +19,7 @@ Jika kode ini membantu mungkin sedikit donasi akan sangat saya hargai
 - Pindah Halaman layar dengan menakan tombol
 
 
-## Bahan/Alat yang Dibutuhkan
+## 🔩 Bahan/Alat yang Dibutuhkan
 - ESP32 DOIT DEVKIT V1
 - RTC DS3231 + IC AT24C32
 - Baterai jam CR2032
@@ -28,7 +28,8 @@ Jika kode ini membantu mungkin sedikit donasi akan sangat saya hargai
 - I2C LED Display 0.91 inch SSD1306
 - Step down ke 5v (jika ambil dari reducer 12v ke 5v)
 - Kabel, Solder, dan Timah
-## SOFTWARE dan DRIVER
+
+## 💿 SOFTWARE dan DRIVER
 ### ARDUINO IDE
 download di https://www.arduino.cc/en/software/
 ### DRIVER
@@ -39,7 +40,7 @@ download di https://www.arduino.cc/en/software/
 - CP210x: https://www.silabs.com/developers/usb-to-uart-bridge-vcp-drivers
 - CH340: http://www.wch.cn/download/CH341SER_EXE.html
 
-## Library
+## 📚 Library
 ### Adafruit SSD1306 (untuk OLED Display)
 Library: Adafruit GFX Library by Adafruit  
 Instal via: Library Manager (cari "Adafruit GFX")
@@ -54,7 +55,7 @@ Instal via: Library Manager (cari "RTClib")
 Versi: 2.1.3 atau yang terbaru
 ### 
 
-## PIN DIAGRAM
+## 🪛 PIN DIAGRAM
 
 ### ESP32 PIN DIAGRAM
 ```
