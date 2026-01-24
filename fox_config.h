@@ -13,7 +13,7 @@
 #define OLED_ADDRESS 0x3C  // Coba 0x3D jika tidak work
 
 // =============================================
-// CAN UPDATE RATE CONFIGURATION (BARU)
+// CAN UPDATE RATE CONFIGURATION
 // =============================================
 
 // CAN Update Rate untuk responsivitas (ms)
@@ -28,14 +28,14 @@
 // =============================================
 // SPLASH SCREEN CONFIGURATION
 // =============================================
-#define SPLASH_TEXT "WELCOME"
-#define SPLASH_DURATION_MS 1500
+#define SPLASH_TEXT "WELCOME"     // TEXT sambutan ketika layar pertama kali menyala
+#define SPLASH_DURATION_MS 1500   // durasi lama teks sambutan 1000=1 detik
 
 // Pilihan font untuk splash screen:
 // 0: Default font (6x8) - KECIL
 // 1: FreeSansBold9pt7b  - SEDANG  
-// 2: FreeSansBold12pt7b - BESAR (default sebelumnya)
-#define SPLASH_FONT_SIZE 1  // REKOMENDASI: 1 (sedang)
+// 2: FreeSansBold12pt7b - BESAR
+#define SPLASH_FONT_SIZE 1  // ganti jika tulisan terpotong
 
 // Position configuration
 #define SPLASH_POS_X 0      // 0 = auto-center, atau nilai spesifik
@@ -94,7 +94,7 @@ static const char* MONTH_NAMES[] = {
 #define ID_SOC              0x0A6E0D09UL  // Persentase baterai atau State of Charge
 
 // =============================================
-// BMS CONFIGURATION (NEW)
+// BMS CONFIGURATION
 // =============================================
 #define BMS_VOLTAGE_RESOLUTION 0.1f    // 0.1V per bit
 #define BMS_CURRENT_RESOLUTION 0.1f    // 0.1A per bit
@@ -116,6 +116,7 @@ static const char* MONTH_NAMES[] = {
 
 // =============================================
 // DISPLAY TEXT CONFIGURATION
+// LABEL TEXT untuk ditampilkan di display sebaiknya kurang dari 5 huruf
 // =============================================
 #define CLOCK_TIME_FORMAT "%02d:%02d"
 #define CLOCK_DATE_FORMAT "%d %s"
@@ -125,7 +126,7 @@ static const char* MONTH_NAMES[] = {
 #define TEMP_LABEL_MOTOR "MOTOR"
 #define TEMP_LABEL_BATT "BATT"
 
-// TAMBAHKAN LABEL UNTUK PAGE 3 (BMS DATA) - DIPERBAIKI
+// TAMBAHKAN LABEL UNTUK PAGE 3 (BMS DATA)
 #define BMS_LABEL_VOLTAGE "VOLT"
 #define BMS_LABEL_CURRENT "ARUS"
 
@@ -138,31 +139,31 @@ static const char* MONTH_NAMES[] = {
 
 #define CHARGING_PAGE PAGE_SPECIAL_ID  // Semua mode khusus pakai page 10
 
-// Durasi sebelum kembali ke page normal (RESPONSIF - diubah dari 30 detik)
+// Durasi sebelum kembali ke page normal
 #define AUTO_MODE_TIMEOUT_MS 5000  // 5 detik - lebih responsif
 
 // =============================================
-// VEHICLE MODE BYTE VALUES - DIPERBARUI
+// VEHICLE MODE BYTE VALUES
 // =============================================
-#define MODE_BYTE_PARK 0x00
-#define MODE_BYTE_DRIVE 0x70
+#define MODE_BYTE_PARK 0x00           // Park mode
+#define MODE_BYTE_DRIVE 0x70          // Drive mode normal
 #define MODE_BYTE_SPORT 0xB0          // Sport mode normal
-#define MODE_BYTE_CRUISE 0x74         // Cruise mode normal
+#define MODE_BYTE_CRUISE 0x74         // Drive + Cruise
 #define MODE_BYTE_SPORT_CRUISE 0xB4   // Sport + Cruise
-#define MODE_BYTE_CUTOFF_DRIVE 0x72   // Cutoff + Drive (BUKAN sport!)
-#define MODE_BYTE_CUTOFF_SPORT 0xB2   // Cutoff + Sport (MASIH sport mode!)
-#define MODE_BYTE_STANDBY_1 0x78
-#define MODE_BYTE_STANDBY_2 0x08
-#define MODE_BYTE_STANDBY_3 0xB8
-#define MODE_BYTE_CHARGING_1 0x61
-#define MODE_BYTE_CHARGING_2 0xA1
-#define MODE_BYTE_CHARGING_3 0xA9
-#define MODE_BYTE_CHARGING_4 0x69
-#define MODE_BYTE_REVERSE 0x50
+#define MODE_BYTE_CUTOFF_DRIVE 0x72   // Cutoff + Drive
+#define MODE_BYTE_CUTOFF_SPORT 0xB2   // Cutoff + Sport
+#define MODE_BYTE_STANDBY_1 0x78      // Standar + Drive
+#define MODE_BYTE_STANDBY_2 0x08      // Standar + Park
+#define MODE_BYTE_STANDBY_3 0xB8      // Standar + Sport
+#define MODE_BYTE_CHARGING_1 0x61     // Locked
+#define MODE_BYTE_CHARGING_2 0xA1     // Locked + Charging
+#define MODE_BYTE_CHARGING_3 0xA9     // Standar + Locked
+#define MODE_BYTE_CHARGING_4 0x69     // Standar + Locked + Charging
+#define MODE_BYTE_REVERSE 0x50        // Reverse
 #define MODE_BYTE_NEUTRAL 0x40
 
 // =============================================
-// MODE DETECTION MACROS - DIPERBARUI
+// MODE DETECTION MACROS
 // =============================================
 #define IS_CHARGING_MODE(b) ((b) == MODE_BYTE_CHARGING_1 || \
                              (b) == MODE_BYTE_CHARGING_2 || \
@@ -189,7 +190,9 @@ static const char* MONTH_NAMES[] = {
                            (b) == MODE_BYTE_CUTOFF_SPORT)
 
 // =============================================
-// DISPLAY POSITION CONFIGURATION (NEW)
+// DISPLAY POSITION CONFIGURATION
+// x untuk jarak dari kiri semakin besar nilainya semakin ke kanan masukan nilai minus jika ingin lebih ke kiri
+// y untuk jarak dari atas semakin besar nilainya semakin ke bawah masukan nilai minus jika ingin lebih ke atas
 // =============================================
 
 // Splash Screen Position
@@ -238,12 +241,9 @@ static const char* MONTH_NAMES[] = {
 #define BMS_VALUE_CURRENT_POS_X 75
 #define BMS_VALUE_CURRENT_POS_Y 16
 
-// Special Mode Indicator Positions (kecil di pojok) - TIDAK DIPAKAI LAGI
-//#define MODE_INDICATOR_POS_X 120  // Pojok kanan atas
-//#define MODE_INDICATOR_POS_Y 0
-
 // =============================================
 // FREERTOS CONFIGURATION (OPTIMIZED FOR STABILITY)
+// SEBAIKNYA JANGAN DIUBAH JIKA TIDAK ADA MASALAH
 // =============================================
 #define I2C_RETRY_COUNT 3
 #define I2C_RETRY_DELAY_MS 5
