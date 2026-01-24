@@ -315,6 +315,10 @@ Day mapping: 1=MINGGU, 2=SENIN, 3=SELASA,
 MIT License - bebas untuk digunakan dan dimodifikasi.
 
 ## 🤝 Contributing
+### Thanks to
+
+- @zexry619 (https://github.com/zexry619/votol-esp32-can-bus)
+- Tri Suliswanto on Facebook
 
 Pull requests welcome! 
 Untuk major changes, buka issue terlebih dahulu.
