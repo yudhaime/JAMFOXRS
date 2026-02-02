@@ -133,7 +133,7 @@ Versi: 2.1.3 atau yang terbaru
 │          │  │            │       │                      │
 │          │  │   CAN      │       │                      │
 │          │  │ TRANSCEIVER│       │                      │
-│          │  │ MCP2551    │       │                      │
+│          │  │ CJMCU-230  │       │                      │
 │          │  │            │       │                      │
 │  GPIO22──┼──┤ TX         │       │                      │
 │          │  │            │       │                      │
