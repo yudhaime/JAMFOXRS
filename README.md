@@ -23,7 +23,6 @@ Jika kode ini membantu mungkin sedikit donasi akan sangat saya hargai
 - ESP32 DOIT DEVKIT V1
 - RTC DS3231 + IC AT24C32
 - Baterai jam CR2032
-- CJMCU-230
 - SN65HVD230 dengan kode CJMCU-230 (BUKAN MCP2515)
 - I2C LED Display 0.91 inch SSD1306
 - Step down ke 5v (jika ambil dari reducer 12v ke 5v)
