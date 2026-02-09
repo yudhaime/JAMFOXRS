@@ -61,8 +61,8 @@ download di https://www.arduino.cc/en/software/
 
 ### WIRING
 1. RTC DS3231 ke ESP32:
-   - SDA → ESP32 Pin D16 (kiri)
-   - SCL → ESP32 Pin D17 (kiri)
+   - SDA → ESP32 Pin RX2/D16 (kiri)
+   - SCL → ESP32 Pin TX2/D17 (kiri)
    - VCC → ESP32 Pin 3V3 (kiri atas)
    - GND → ESP32 Pin GND mana saja
      
@@ -81,7 +81,7 @@ download di https://www.arduino.cc/en/software/
 
 4. TOMBOL (BUTTON):
    - Satu kaki → ESP32 Pin D25 (kanan)
-   - Kaki lain → GND (dengan resistor pull-up internal)
+   - Kaki lain → GND
 
 5. KELISTRIKAN Step down ke 5v
    - Arus Positif (+) ke VIN
