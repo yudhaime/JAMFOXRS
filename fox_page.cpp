@@ -2,115 +2,91 @@
 #include "fox_config.h"
 #include "fox_display.h"
 #include "fox_canbus.h"
+#include "fox_serial.h"
 
 // =============================================
 // GLOBAL VARIABLES
 // =============================================
 int currentPage = 1;
-bool setupMode = false;
-bool pageLocked = false;
-bool wasCharging = false; // Tetap ada untuk kompatibilitas, tapi tidak digunakan
-uint8_t currentSpecialMode = 0;
 int lastNormalPage = 1;
+bool setupMode = false;
+uint8_t currentSpecialMode = 0;
 
-// Button
+// Button state
 bool lastButton = HIGH;
-unsigned long setupModeStart = 0;
 unsigned long lastButtonPress = 0;
 
-// Cruise blink
-unsigned long lastCruiseBlinkTime = 0;
-bool cruiseBlinkState = true;
-
-// Anti-bounce untuk mode detection
-static unsigned long lastModeChangeTime = 0;
-static const unsigned long MODE_CHANGE_DEBOUNCE = 500;
-
 // =============================================
-// ENTER SPECIAL MODE - HANYA UNTUK SPORT & CRUISE
+// PAGE ORDER FUNCTIONS (NEW)
 // =============================================
-void enterSpecialMode(uint8_t mode) {
-    if(mode == MODE_NORMAL) return; // Hanya cek MODE_NORMAL saja
-    
-    // Simpan page normal
-    if(currentSpecialMode == MODE_NORMAL) {
-        lastNormalPage = currentPage;
-    }
-    
-    // Update state
-    currentSpecialMode = mode;
-    
-    // Tampilkan segera
-    if(mode == MODE_CRUISE) {
-        cruiseBlinkState = true;
-        lastCruiseBlinkTime = millis();
-        safeShowSpecialMode(MODE_CRUISE, true);
-    } else if(mode == MODE_SPORT) {
-        safeShowSpecialMode(MODE_SPORT, true);
-    }
-    // Tidak ada untuk mode lain (termasuk charging yang sudah dihapus)
-}
-
-// =============================================
-// CRUISE BLINK HANDLER
-// =============================================
-void handleCruiseBlink() {
-    unsigned long now = millis();
-    
-    if(now - lastCruiseBlinkTime > BLINK_INTERVAL_MS) {
-        cruiseBlinkState = !cruiseBlinkState;
-        safeShowSpecialMode(MODE_CRUISE, cruiseBlinkState);
-        lastCruiseBlinkTime = now;
-    }
-}
-
-// =============================================
-// MODE DETECTION - TANPA CHARGING
-// =============================================
-void updateModeDetection() {
-    unsigned long now = millis();
-    
-    // Debounce: minimal 500ms antara perubahan mode
-    if(now - lastModeChangeTime < MODE_CHANGE_DEBOUNCE) {
-        return;
-    }
-    
-    // Dapatkan state SAAT INI (HANYA SPORT & CRUISE)
-    bool sportNow = isSportMode();
-    bool cruiseNow = isCruiseMode();
-    
-    // Tentukan mode target (HANYA SPORT, CRUISE, atau NORMAL)
-    uint8_t targetMode = MODE_NORMAL;
-    
-    if(cruiseNow) {
-        targetMode = MODE_CRUISE;
-    }
-    else if(sportNow) {
-        targetMode = MODE_SPORT;
-    }
-    // Tidak ada kondisi untuk charging
-    
-    // Jika mode berubah
-    if(targetMode != currentSpecialMode) {
-        lastModeChangeTime = now;
-        
-        if(targetMode == MODE_NORMAL) {
-            // Kembali ke normal
-            returnToNormalMode();
-        } else {
-            // Masuk special mode (hanya sport/cruise)
-            enterSpecialMode(targetMode);
+int getNextPageInOrder(int currentPage) {
+    // Cari posisi currentPage dalam PAGE_ORDER
+    for (int i = 0; i < PAGE_ORDER_COUNT; i++) {
+        if (PAGE_ORDER[i] == currentPage) {
+            // Cari page enabled berikutnya (circular navigation)
+            for (int j = 1; j <= PAGE_ORDER_COUNT; j++) {
+                int nextIndex = (i + j) % PAGE_ORDER_COUNT;
+                int nextPage = PAGE_ORDER[nextIndex];
+                
+                // Check if page is enabled
+                bool enabled = false;
+                switch (nextPage) {
+                    case 1: enabled = PAGE_1_ENABLE; break;
+                    case 2: enabled = PAGE_2_ENABLE; break;
+                    case 3: enabled = PAGE_3_ENABLE; break;
+                    case 4: enabled = PAGE_4_ENABLE; break;
+                }
+                
+                if (enabled) {
+                    return nextPage;
+                }
+            }
+            // Jika tidak ada page enabled lainnya, tetap di page ini
+            return currentPage;
         }
     }
     
-    // Handle cruise blink
-    if(currentSpecialMode == MODE_CRUISE) {
-        handleCruiseBlink();
+    // Jika currentPage tidak ada di PAGE_ORDER, cari page enabled pertama
+    return getFirstEnabledPage();
+}
+
+int getFirstEnabledPage() {
+    // Cari page enabled pertama sesuai urutan
+    for (int i = 0; i < PAGE_ORDER_COUNT; i++) {
+        int page = PAGE_ORDER[i];
+        
+        bool enabled = false;
+        switch (page) {
+            case 1: enabled = PAGE_1_ENABLE; break;
+            case 2: enabled = PAGE_2_ENABLE; break;
+            case 3: enabled = PAGE_3_ENABLE; break;
+            case 4: enabled = PAGE_4_ENABLE; break;
+        }
+        
+        if (enabled) {
+            return page;
+        }
+    }
+    
+    // Fallback jika tidak ada page yang enabled
+    return 1;
+}
+
+// =============================================
+// MODE DETECTION - DISABLED
+// =============================================
+void updateModeDetection() {
+    currentSpecialMode = 0;
+    
+    static bool firstLog = true;
+    if(firstLog && debugModeEnabled) {
+        serialPrintf("[MODE] Detection disabled - Always NORMAL mode\n");
+        firstLog = false;
     }
 }
 
 // =============================================
-// BUTTON FUNCTIONS (TETAP SAMA)
+// BUTTON FUNCTIONS (UPDATED WITH PAGE ORDER)
 // =============================================
 void initButton() {
     pinMode(BUTTON_PIN, INPUT_PULLUP);
@@ -119,11 +95,11 @@ void initButton() {
 bool checkButtonPress() {
     bool btn = digitalRead(BUTTON_PIN);
     
-    if(btn == LOW && lastButton == HIGH) {
+    if (btn == LOW && lastButton == HIGH) {
         delay(DEBOUNCE_DELAY);
-        if(digitalRead(BUTTON_PIN) == LOW) {
+        if (digitalRead(BUTTON_PIN) == LOW) {
             unsigned long now = millis();
-            if((now - lastButtonPress) > BUTTON_COOLDOWN_MS) {
+            if ((now - lastButtonPress) > BUTTON_COOLDOWN_MS) {
                 lastButtonPress = now;
                 lastButton = btn;
                 return true;
@@ -135,90 +111,65 @@ bool checkButtonPress() {
 }
 
 void handleButtonPress() {
-    if(currentSpecialMode != MODE_NORMAL || setupMode) {
+    if (setupMode) {
         return;
     }
     
-    int nextPage = currentPage;
-    for(int i = 0; i < 3; i++) {
-        nextPage++;
-        if(nextPage > 3) nextPage = 1;
-        
-        bool enabled = false;
-        if(nextPage == 1 && PAGE_1_ENABLE) enabled = true;
-        else if(nextPage == 2 && PAGE_2_ENABLE) enabled = true;
-        else if(nextPage == 3 && PAGE_3_ENABLE) enabled = true;
-        
-        if(enabled) {
-            currentPage = nextPage;
-            lastNormalPage = currentPage;
-            safeDisplayUpdate(currentPage);
+    #ifdef ESP32
+    // CHARGING MODE: Minimal delay
+    if(isChargingModeActive()) {
+        if(getChargerMessageAge() < 50) {
             return;
+        }
+        delay(50);
+    }
+    #endif
+    
+    // GUNAKAN SISTEM URUTAN PAGE BARU
+    int nextPage = getNextPageInOrder(currentPage);
+    
+    if (nextPage != currentPage) {
+        currentPage = nextPage;
+        lastNormalPage = currentPage;
+        
+        // Fast display update
+        safeDisplayUpdate(currentPage);
+        
+        if (debugModeEnabled) {
+            serialPrintf("[PAGE] Changed to page %d\n", currentPage);
         }
     }
 }
 
 // =============================================
-// MODE MANAGEMENT (legacy functions)
+// PAGE MANAGEMENT (UPDATED)
 // =============================================
 void switchToPage(int page) {
-    if(page < 1 || page > 3) return;
+    if (page < 1 || page > 4) return;
     
-    // Validasi page enable
-    if((page == 1 && !PAGE_1_ENABLE) || 
-       (page == 2 && !PAGE_2_ENABLE) ||
-       (page == 3 && !PAGE_3_ENABLE)) {
-        return;
+    // Validasi page enabled
+    bool enabled = false;
+    switch (page) {
+        case 1: enabled = PAGE_1_ENABLE; break;
+        case 2: enabled = PAGE_2_ENABLE; break;
+        case 3: enabled = PAGE_3_ENABLE; break;
+        case 4: enabled = PAGE_4_ENABLE; break;
     }
     
-    // Hanya jika tidak dalam mode khusus atau setup
-    if(currentSpecialMode != MODE_NORMAL) {
+    if (!enabled) {
+        if (debugModeEnabled) {
+            serialPrintf("[PAGE] Page %d is disabled\n", page);
+        }
         return;
-    }
-    
-    if(setupMode) {
-        return;
-    }
+        }
     
     currentPage = page;
-    lastNormalPage = page;
+    lastNormalPage = currentPage;
     
     safeDisplayUpdate(currentPage);
-}
-
-void switchToSpecialMode(SpecialMode mode) {
-    // Jangan izinkan switching ke mode yang sudah dihapus
-    if(mode == MODE_NORMAL || currentSpecialMode == mode) return;
     
-    // Hanya izinkan sport dan cruise
-    if(mode != MODE_SPORT && mode != MODE_CRUISE) return;
-    
-    enterSpecialMode(mode);
-}
-
-void returnToNormalMode() {
-    if(currentSpecialMode == MODE_NORMAL) return;
-    
-    currentSpecialMode = MODE_NORMAL;
-    currentPage = lastNormalPage;
-    
-    safeDisplayUpdate(currentPage);
-}
-
-void forceNormalMode() {
-    currentSpecialMode = MODE_NORMAL;
-    wasCharging = false;
-    currentPage = lastNormalPage;
-    
-    safeDisplayUpdate(currentPage);
-}
-
-// =============================================
-// SPECIAL MODE DISPLAY HANDLER (for compatibility)
-// =============================================
-void handleSpecialModeDisplay() {
-    if(currentSpecialMode == MODE_CRUISE) {
-        handleCruiseBlink();
+    if (debugModeEnabled) {
+        serialPrintf("[PAGE] Manual switch to page %d\n", page);
     }
 }
 
@@ -226,17 +177,9 @@ void handleSpecialModeDisplay() {
 // GETTER FUNCTIONS
 // =============================================
 uint8_t getCurrentSpecialMode() { 
-    return currentSpecialMode; 
-}
-
-bool isInSpecialMode() { 
-    return (currentSpecialMode != MODE_NORMAL); 
+    return currentSpecialMode;
 }
 
 int getCurrentDisplayPage() { 
     return currentPage; 
-}
-
-int getLastNormalDisplayPage() { 
-    return lastNormalPage; 
 }
