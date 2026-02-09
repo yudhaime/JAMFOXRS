@@ -8,19 +8,28 @@ void initDisplay();
 void updateDisplay(int page);
 void showSetupMode(bool blinkState);
 void resetDisplay();
+void resetDisplayState();
 
 // Thread-safe display functions
 bool safeDisplayUpdate(int page);
 
-// SPECIAL MODE DISPLAY FUNCTIONS
-void updateSpecialModeDisplay(uint8_t modeType, bool blinkState = false);
-bool safeShowSpecialMode(uint8_t modeType, bool blinkState = false);
+// Animation functions
+void updateAnimation();
+void updateAnimationTargets();
+void resetAnimation();
+
+// Formatting functions
+String formatVoltage(float voltage);
+String formatCurrent(float current);
+String formatPower(float power);
+String removeTrailingZero(float value, int decimalPlaces);
+
+// I2C Safety & Recovery
+bool safeI2COperation(uint32_t timeoutMs);
+void releaseI2C();
+void recoverI2CBus();
 
 // Display status
 extern bool displayReady;
-
-// Helper untuk FreeRTOS
-bool safeI2COperation(uint32_t timeoutMs);  // Internal use
-void releaseI2C();                          // Internal use
 
 #endif
