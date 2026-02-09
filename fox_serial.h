@@ -3,20 +3,27 @@
 
 #include <Arduino.h>
 
-// =============================================
-// SIMPLIFIED SERIAL COMMAND PROCESSING
-// =============================================
+extern bool debugModeEnabled;
 
-// Command processor
+// Serial print functions
+void serialPrint(const char* message);
+void serialPrintf(const char* format, ...);
+void serialPrintln(const char* message);
+void serialPrintfln(const char* format, ...);
+
+// Always print (important messages)
+void serialPrintAlways(const char* message);
+void serialPrintflnAlways(const char* format, ...);
+
+// Command processing
 void processSerialCommands();
+void printSystemStartup();
 
-// Command handlers (HANYA 4 INI)
-void handleHelpCommand();
-void handleDayCommand(String param);
-void handleTimeCommand(String param);
-void handleDateCommand(String param);
-
-// Helper
+// System functions
+void toggleDebugMode(bool enable);
+void printSystemStatus();
+void printDetailedData();
+void emergencyReset();
 void printHelp();
 
 #endif
