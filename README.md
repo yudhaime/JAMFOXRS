@@ -1,7 +1,7 @@
 
 # DISPLAY JAM CUSTOM MOTOR LISTRIK POLYTRON FOX R/S
 
-Display jam untuk motor listrik Polytron Fox R/S disertai display suhu kendaraan secara realtime
+Display jam untuk motor listrik Polytron Fox R/S disertai display status kendaraan secara realtime
 
 ## 💰 DONASI
 
