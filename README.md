@@ -14,8 +14,8 @@ Jika kode ini membantu mungkin sedikit donasi akan sangat saya hargai
 
 - Menampilkan jam
 - Menampilkan suhu controller, bldc, dan baterai
-- Menampilkan speed 3 digit untuk mengatasi limitasi speedo bawaan yang hanya dua digit
-- Notifikasi Cruise aktif
+- Menampilkan voltase dan arus baterai
+- Menampilkan daya baterai dalam watt
 - Pindah Halaman layar dengan menakan tombol
 
 
