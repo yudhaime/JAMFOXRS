@@ -3,37 +3,104 @@
 
 #include <Arduino.h>
 
-// Inisialisasi dan update
+#ifdef ESP32
+#include <driver/twai.h>
+#include <freertos/FreeRTOS.h>
+#include <freertos/semphr.h>
+#include <atomic>
+
+// ATOMIC VARIABLES
+extern std::atomic<float> realtimeVoltage;
+extern std::atomic<float> realtimeCurrent;
+extern std::atomic<uint32_t> realtimeUpdateTime;
+
+// NEW: Charger detection atomic variables
+extern std::atomic<bool> chargerConnected;
+extern std::atomic<bool> oriChargerDetected;
+extern std::atomic<uint32_t> lastChargerMsgTime;
+extern std::atomic<uint32_t> lastOriChargerMsgTime;
+
+// NEW: Charging mode flag
+extern std::atomic<bool> isChargingMode;
+
+// NEW: System health monitor
+extern std::atomic<uint32_t> lastSuccessfulLoop;
+extern std::atomic<uint32_t> systemErrorCount;
+
+// CAN TASK FUNCTION
+void canTask(void *pvParameters);
+#endif
+
+// =============================================
+// INITIALIZATION
+// =============================================
 bool initCAN();
-void updateCAN();
 void resetCANData();
 
-// Getter functions
-bool getChargingStatus();
-uint8_t getCurrentModeByte();
-bool isCurrentlyCharging();
+// =============================================
+// CHARGING MODE FUNCTIONS (NEW)
+// =============================================
+bool isChargingModeActive();
+bool isOriChargerActive();
+uint32_t getChargerMessageAge();
+void setChargingMode(bool enable);
+void updateSystemHealth();
 
-// Temperature getters
+// =============================================
+// REAL-TIME DATA GETTERS
+// =============================================
+float getRealtimeVoltage();
+float getRealtimeCurrent();
+unsigned long getRealtimeUpdateTime();
+bool isDataFresh();
+
+// Charging mode getters
+float getChargingVoltage();
+float getChargingCurrent();
+
+// =============================================
+// COMPATIBILITY FUNCTIONS
+// =============================================
+float getBatteryVoltage();
+float getBatteryCurrent();
+
+// =============================================
+// TEMPERATURE GETTERS (ENABLED)
+// =============================================
 int getTempCtrl();
 int getTempMotor();
 int getTempBatt();
 
-// Mode detection
-uint8_t getCurrentVehicleMode();
+// =============================================
+// MODE DATA GETTERS (COMPATIBILITY)
+// =============================================
+uint8_t getCurrentModeByte();
 bool isSportMode();
 bool isCruiseMode();
 bool isCutoffMode();
 
-// BMS DATA GETTERS
-float getBatteryVoltage();
-float getBatteryCurrent();
+// =============================================
+// OTHER GETTERS
+// =============================================
 uint8_t getBatterySOC();
 bool isChargingCurrent();
+bool isChargerConnected();
+bool isOriChargerDetected();
 
-// Data access untuk display
+// Data access for display
 void getBMSDataForDisplay(float &voltage, float &current, uint8_t &soc, bool &isCharging);
 
-// Debug
-void printModeDebugInfo();
+// =============================================
+// STATISTICS & DEBUG
+// =============================================
+uint32_t getCANMessageCount();
+uint32_t getCANMessagesPerSecond();
+void resetCANStatistics();
+
+// =============================================
+// SYSTEM HEALTH
+// =============================================
+uint32_t getSystemErrorCount();
+void resetSystemErrorCount();
 
 #endif
