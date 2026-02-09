@@ -1,8 +1,7 @@
 #include "fox_task.h"
 #include "fox_config.h"
-#include "fox_display.h"
 #include "fox_canbus.h"
-#include "fox_page.h"
+#include "fox_serial.h"
 
 #ifdef ESP32
 
@@ -10,101 +9,46 @@
 // FREERTOS HANDLES
 // =============================================
 TaskHandle_t canTaskHandle = NULL;
-TaskHandle_t displayTaskHandle = NULL;
-TaskHandle_t serialTaskHandle = NULL;
 
-SemaphoreHandle_t i2cMutex = NULL;
+// Semaphores & Mutexes
 SemaphoreHandle_t dataMutex = NULL;
-QueueHandle_t eventQueue = NULL;
+SemaphoreHandle_t i2cMutex = NULL;
 
 // =============================================
 // FREERTOS INITIALIZATION
 // =============================================
 void initFreeRTOS() {
-    i2cMutex = xSemaphoreCreateMutex();
+    // Create mutexes
     dataMutex = xSemaphoreCreateMutex();
-    eventQueue = xQueueCreate(5, sizeof(EventMessage));
+    i2cMutex = xSemaphoreCreateMutex();
+    
+    if(dataMutex == NULL || i2cMutex == NULL) {
+        serialPrintflnAlways("[FreeRTOS] ERROR: Failed to create mutexes!");
+        while(1); // Critical error - halt
+    }
+    
+    serialPrintflnAlways("[FreeRTOS] Mutexes created successfully");
 }
 
+// =============================================
+// CREATE TASKS
+// =============================================
 void createTasks() {
-    delay(500);
+    delay(100); // Short delay for stability
     
+    // Create CAN Task on Core 0 (High Priority)
     xTaskCreatePinnedToCore(
-        displayTask,
-        "Display Task",
-        STACK_SIZE_DISPLAY,
-        NULL,
-        TASK_PRIORITY_DISPLAY,
-        &displayTaskHandle,
-        CORE_DISPLAY
+        canTask,                 // Task function
+        "CAN_Task",              // Task name
+        STACK_SIZE_CAN,          // Stack size
+        NULL,                    // Parameters
+        TASK_PRIORITY_CAN,       // Priority (HIGHEST)
+        &canTaskHandle,          // Task handle
+        CORE_CAN                 // Core 0
     );
     
-    xTaskCreatePinnedToCore(
-        canTask,
-        "CAN Task",
-        STACK_SIZE_CAN,
-        NULL,
-        TASK_PRIORITY_CAN,
-        &canTaskHandle,
-        CORE_CAN
-    );
-    
-    xTaskCreatePinnedToCore(
-        serialTask,
-        "Serial Task",
-        STACK_SIZE_SERIAL,
-        NULL,
-        TASK_PRIORITY_SERIAL,
-        &serialTaskHandle,
-        CORE_SERIAL
-    );
-}
-
-void sendEvent(EventType type, int data) {
-    if(eventQueue == NULL) return;
-    
-    EventMessage msg;
-    msg.type = type;
-    msg.data = data;
-    
-    xQueueSend(eventQueue, &msg, 10);
-}
-
-// =============================================
-// TASKS - MINIMAL VERSION
-// =============================================
-void canTask(void *parameter) {
-    // Tunggu display ready
-    while(!displayReady) {
-        vTaskDelay(pdMS_TO_TICKS(100));
-    }
-    
-    TickType_t lastWakeTime = xTaskGetTickCount();
-    
-    while(1) {
-        updateCAN();
-        vTaskDelayUntil(&lastWakeTime, pdMS_TO_TICKS(CAN_UPDATE_RATE_MS));
-    }
-}
-
-void displayTask(void *parameter) {
-    while(!displayReady) {
-        vTaskDelay(pdMS_TO_TICKS(100));
-    }
-    
-    TickType_t lastWakeTime = xTaskGetTickCount();
-    
-    while(1) {
-        vTaskDelayUntil(&lastWakeTime, pdMS_TO_TICKS(DISPLAY_UPDATE_RATE_MS));
-    }
-}
-
-void serialTask(void *parameter) {
-    TickType_t lastWakeTime = xTaskGetTickCount();
-    
-    while(1) {
-        vTaskDelayUntil(&lastWakeTime, pdMS_TO_TICKS(SERIAL_UPDATE_RATE_MS));
-    }
+    serialPrintflnAlways("[FreeRTOS] CAN Task created on Core %d", CORE_CAN);
+    serialPrintflnAlways("[FreeRTOS] Display/UI will run on Core %d", CORE_DISPLAY);
 }
 
 #endif // ESP32
