@@ -87,20 +87,26 @@
 #define PAGE_3_ENABLE true    // BMS Data
 #define PAGE_4_ENABLE true    // Power Display
 
-// NEW: Define page order (1-4 in desired order)
+// Define page order (1-4 in desired order)
 const uint8_t PAGE_ORDER[] = {1, 2, 3, 4};  // Default: normal order
 const uint8_t PAGE_ORDER_COUNT = 4;         // Number of pages in order array
 
 // =============================================
-// PAGE CONFIGURATION - FLEXIBLE ORDER
+// CHARGING MODE CONFIGURATION
 // =============================================
-// Define page enable flags
-//#define PAGE_1_ENABLE true    // Clock
-//#define PAGE_2_ENABLE true    // Temperature  
-//#define PAGE_3_ENABLE true    // BMS Data
-//#define PAGE_4_ENABLE true    // Power Display
-//const uint8_t PAGE_ORDER[] = {1, 2, 3, 4};  // Default: normal order
-//const uint8_t PAGE_ORDER_COUNT = 4;         // Number of pages in order array
+#define CHARGING_MODE_ENABLED false
+
+// NEW: Enable/disable Charging Display Page
+#define CHARGING_PAGE_ENABLED false   // Set false untuk disable charging page
+                                     // Set true untuk enable charging page
+
+// Charging-specific timing
+#define CHARGING_CAN_UPDATE_MS 100
+#define CHARGING_DISPLAY_UPDATE_MS 5000  // 5 detik update untuk charging page
+#define CHARGING_CURRENT_DEADZONE 1.0f
+
+// Charger timeout
+#define CHARGER_TIMEOUT_MS 3000
 
 // =============================================
 // DAY & MONTH CONFIGURATION
@@ -136,37 +142,11 @@ static const char* MONTH_NAMES[] = {
 #define ID_BATT_SINGLE      0x0A010A10UL
 #define ID_VOLTAGE_CURRENT  0x0A6D0D09UL
 
-// NEW: CHARGER SPAM MESSAGE IDs
+// CHARGER SPAM MESSAGE IDs
 #define ORI_CHARGER_SPAM_ID 0x10261041UL
 #define CHARGER_DATA_ID_1   0x1810D0F3UL
 #define CHARGER_DATA_ID_2   0x1811D0F3UL
 #define BMS_CHARGING_FLAG   0x0AB40D09UL
-
-// =============================================
-// CHARGING MODE CONFIGURATION
-// =============================================
-#define CHARGING_MODE_ENABLED true
-
-// Charging-specific timing
-#define CHARGING_CAN_UPDATE_MS 100
-#define CHARGING_DISPLAY_UPDATE_MS 5000
-#define CHARGING_CURRENT_DEADZONE 1.0f
-
-// Charger timeout
-#define CHARGER_TIMEOUT_MS 3000
-
-// Task priorities untuk charging mode
-#define TASK_PRIORITY_CAN       3
-#define TASK_PRIORITY_DISPLAY   1
-#define TASK_PRIORITY_SERIAL    1
-
-// Core allocation
-#define CORE_CAN                0
-#define CORE_DISPLAY            1
-
-// CAN Task timing - ADAPTIVE
-#define CAN_TASK_UPDATE_DRIVING_MS     5
-#define CAN_TASK_UPDATE_CHARGING_MS    50
 
 // =============================================
 // BMS CONFIGURATION
