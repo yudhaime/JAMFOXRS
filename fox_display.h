@@ -32,4 +32,7 @@ void recoverI2CBus();
 // Display status
 extern bool displayReady;
 
+// NEW: Charging page check
+bool isChargingPageDisplayed();
+
 #endif
