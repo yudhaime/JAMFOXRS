@@ -14,16 +14,16 @@ extern std::atomic<float> realtimeVoltage;
 extern std::atomic<float> realtimeCurrent;
 extern std::atomic<uint32_t> realtimeUpdateTime;
 
-// NEW: Charger detection atomic variables
+// Charger detection atomic variables
 extern std::atomic<bool> chargerConnected;
 extern std::atomic<bool> oriChargerDetected;
 extern std::atomic<uint32_t> lastChargerMsgTime;
 extern std::atomic<uint32_t> lastOriChargerMsgTime;
 
-// NEW: Charging mode flag
+// Charging mode flag
 extern std::atomic<bool> isChargingMode;
 
-// NEW: System health monitor
+// System health monitor
 extern std::atomic<uint32_t> lastSuccessfulLoop;
 extern std::atomic<uint32_t> systemErrorCount;
 
@@ -38,13 +38,16 @@ bool initCAN();
 void resetCANData();
 
 // =============================================
-// CHARGING MODE FUNCTIONS (NEW)
+// CHARGING MODE FUNCTIONS
 // =============================================
 bool isChargingModeActive();
 bool isOriChargerActive();
 uint32_t getChargerMessageAge();
 void setChargingMode(bool enable);
 void updateSystemHealth();
+
+// NEW: Charging page enabled check
+bool isChargingPageEnabled();
 
 // =============================================
 // REAL-TIME DATA GETTERS
