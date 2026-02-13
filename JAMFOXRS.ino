@@ -154,7 +154,7 @@ void loop() {
         #endif
     }
     
-    // 5. DISPLAY UPDATE - VISUAL HEALTH INDICATOR
+    // 5. DISPLAY UPDATE - WITH CHARGING PAGE CONDITIONAL
     static unsigned long lastDisplayUpdate = 0;
     static int lastDisplayedPage = -1;
     static uint32_t displayErrorCount = 0;
@@ -166,20 +166,9 @@ void loop() {
     uint32_t displayUpdateRate = 500; // default
     
     #ifdef ESP32
-    if(isChargingModeActive()) {
-        // CHARGING MODE: Update sangat lambat
-        switch(currentPage) {
-            case 1: displayUpdateRate = 10000; break; // 10 detik
-            case 2: displayUpdateRate = 8000;  break; // 8 detik
-            case 3: 
-            case 4: displayUpdateRate = 5000;  break; // 5 detik
-            default: displayUpdateRate = 5000;
-        }
-        
-        // Force update jika ada banyak error (visual feedback)
-        if(getSystemErrorCount() > 0 && (now % 3000 < 100)) {
-            forceUpdate = true;
-        }
+    if(isChargingModeActive() && CHARGING_PAGE_ENABLED) {
+        // CHARGING MODE: Update lambat untuk charging page
+        displayUpdateRate = CHARGING_DISPLAY_UPDATE_MS; // 5000ms dari config
     } else {
     #endif
         // NORMAL MODE
@@ -193,6 +182,11 @@ void loop() {
     #ifdef ESP32
     }
     #endif
+    
+    // Force update jika ada banyak error (visual feedback)
+    if(getSystemErrorCount() > 0 && (now % 3000 < 100)) {
+        forceUpdate = true;
+    }
     
     // Update jika perlu
     if(forceUpdate || (now - lastDisplayUpdate > displayUpdateRate)) {
