@@ -232,13 +232,6 @@ void updateAnimationTargets() {
     float newVoltage = getRealtimeVoltage();
     float newCurrent = getRealtimeCurrent();
     
-    #ifdef ESP32
-    if(isChargingModeActive()) {
-        newVoltage = getChargingVoltage();
-        newCurrent = getChargingCurrent();
-    }
-    #endif
-    
     float newPower = newVoltage * newCurrent;
     
     if(newPower > MAX_DISPLAY_POWER) newPower = MAX_DISPLAY_POWER;
@@ -328,6 +321,17 @@ void updateAnimation() {
         if(animatedPower > MAX_DISPLAY_POWER) animatedPower = MAX_DISPLAY_POWER;
         if(animatedPower < MIN_DISPLAY_POWER) animatedPower = MIN_DISPLAY_POWER;
     }
+}
+
+// =============================================
+// CHECK IF CHARGING PAGE SHOULD BE DISPLAYED
+// =============================================
+bool isChargingPageDisplayed() {
+    #ifdef ESP32
+    return (isChargingModeActive() && CHARGING_PAGE_ENABLED);
+    #else
+    return false;
+    #endif
 }
 
 // =============================================
@@ -451,34 +455,16 @@ void updateDisplay(int page) {
     display.setTextColor(SSD1306_WHITE);
     
     // ============================================
-    // CHARGING MODE: SIMPLE DISPLAY
+    // CHARGING MODE: SIMPLE DISPLAY (CONDITIONAL)
     // ============================================
     #ifdef ESP32
-    if(isChargingModeActive()) {
-        // SIMPLE CHARGING DISPLAY
-        
-        float voltage = getChargingVoltage();
-        float current = getChargingCurrent();
-        
+    if(isChargingModeActive() && CHARGING_PAGE_ENABLED) {
         display.setTextSize(2);
-        display.setCursor(10, 10);
-        display.printf("%.1fV", voltage);
-        
-        display.setTextSize(1);
-        display.setCursor(15, 28);
-        if(current > 0.1f) {
-            display.printf("+%.1fA", current);
-        } else if(current < -0.1f) {
-            display.printf("%.1fA", current);
-        } else {
-            display.print("0A");
-        }
-        
-        display.setCursor(80, 28);
-        display.print("CHARGE");
+        display.setCursor(0, 0);
+        display.print("LOCKED");
         
         display.display();
-        return;
+        return;  // EXIT - TIDAK PROSES PAGE NORMAL
     }
     #endif
     
