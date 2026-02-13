@@ -29,16 +29,16 @@ std::atomic<float> realtimeVoltage{0.0f};
 std::atomic<float> realtimeCurrent{0.0f};
 std::atomic<uint32_t> realtimeUpdateTime{0};
 
-// NEW: Charger detection atomic variables
+// Charger detection atomic variables
 std::atomic<bool> chargerConnected{false};
 std::atomic<bool> oriChargerDetected{false};
 std::atomic<uint32_t> lastChargerMsgTime{0};
 std::atomic<uint32_t> lastOriChargerMsgTime{0};
 
-// NEW: Charging mode flag
+// Charging mode flag
 std::atomic<bool> isChargingMode{false};
 
-// NEW: System health monitor
+// System health monitor
 std::atomic<uint32_t> lastSuccessfulLoop{0};
 std::atomic<uint32_t> systemErrorCount{0};
 
@@ -63,7 +63,7 @@ bool initCAN() {
         .clkout_io = TWAI_IO_UNUSED,
         .bus_off_io = TWAI_IO_UNUSED,
         .tx_queue_len = 0,
-        .rx_queue_len = 5,  // VERY SMALL queue untuk charging mode
+        .rx_queue_len = 20,  // INCREASED for smooth data flow
         .alerts_enabled = TWAI_ALERT_NONE,
         .clkout_divider = 0
     };
@@ -139,28 +139,25 @@ void resetSystemErrorCount() {
 }
 
 // =============================================
-// SPAM MESSAGE DETECTION & FILTERING
+// CHARGING PAGE HELPER FUNCTIONS
+// =============================================
+bool isChargingPageEnabled() {
+    return CHARGING_PAGE_ENABLED;
+}
+
+// =============================================
+// SPAM MESSAGE DETECTION - MINIMAL
 // =============================================
 bool isSpamChargerMessage(uint32_t id) {
-    // Deteksi message spam charger
-    if (id == ORI_CHARGER_SPAM_ID) {
-        return true; // Spam utama
-    }
-    
-    if (id == CHARGER_DATA_ID_1 || id == CHARGER_DATA_ID_2) {
-        return true; // Charger data spam
-    }
-    
-    // BMS charging flags juga bisa spam
-    if (id == BMS_CHARGING_FLAG) {
-        return true;
-    }
-    
+    // Only detect actual spam IDs, no aggressive filtering
+    if (id == ORI_CHARGER_SPAM_ID) return true;
+    if (id == CHARGER_DATA_ID_1 || id == CHARGER_DATA_ID_2) return true;
+    if (id == BMS_CHARGING_FLAG) return true;
     return false;
 }
 
 // =============================================
-// ULTRA-LIGHT CAN PARSING - NO MUTEX DEADLOCK
+// REAL-TIME CAN PARSING - NO ARTIFICIAL DELAYS
 // =============================================
 void parseCANMessage(twai_message_t &message) {
     uint32_t id = message.identifier;
@@ -172,23 +169,16 @@ void parseCANMessage(twai_message_t &message) {
     // Count total messages
     canMessageCount.fetch_add(1, std::memory_order_relaxed);
     
-    // ========== SPAM FILTERING FOR CHARGING ==========
+    // ========== CHARGER DETECTION - NO RATE LIMITING ==========
     if (isSpamChargerMessage(id)) {
-        // Update charger detection flags dengan rate limiting
-        static unsigned long lastSpamProcess = 0;
-        if (receivedTime - lastSpamProcess < 100) { // Max 10Hz untuk spam
-            return; // Skip processing
-        }
-        lastSpamProcess = receivedTime;
-        
-        // Update charger status
+        // Update charger status IMMEDIATELY - no rate limiting
         if (id == ORI_CHARGER_SPAM_ID) {
             oriChargerDetected.store(true, std::memory_order_release);
             lastOriChargerMsgTime.store(receivedTime, std::memory_order_release);
             oriChargerMessageCount.fetch_add(1, std::memory_order_relaxed);
             
-            // Auto-activate charging mode
-            if (!isChargingMode.load(std::memory_order_acquire)) {
+            // Auto-activate charging mode HANYA JIKA charging page ENABLED
+            if (CHARGING_PAGE_ENABLED && !isChargingMode.load(std::memory_order_acquire)) {
                 isChargingMode.store(true, std::memory_order_release);
             }
         } else {
@@ -197,37 +187,34 @@ void parseCANMessage(twai_message_t &message) {
             chargerMessageCount.fetch_add(1, std::memory_order_relaxed);
         }
         
-        // Untuk spam messages, kita hanya update flags
+        // Continue processing - don't early exit for messages that also contain data
         if (id != ID_VOLTAGE_CURRENT && id != ID_CTRL_MOTOR && id != ID_BATT_5S) {
-            return; // Early exit untuk pure spam messages
+            return; // Only exit for pure spam messages with no data
         }
     }
     
-    // ========== PRIORITY 1: VOLTAGE & CURRENT ==========
+    // ========== VOLTAGE & CURRENT - ALWAYS REAL-TIME ==========
     if(id == ID_VOLTAGE_CURRENT && message.data_length_code >= 8) {
-        // Voltage parsing - REAL-TIME
+        // Voltage parsing
         uint16_t vRaw = (uint16_t)((message.data[0] << 8) | message.data[1]);
         float voltage = vRaw * 0.1f;
         
-        // Current parsing - REAL-TIME
+        // Current parsing
         uint16_t iRawU = (uint16_t)((message.data[2] << 8) | message.data[3]);
         int16_t iRawS = (int16_t)iRawU;
         float current = iRawS * 0.1f;
         
-        // Adjust deadzone based on charging mode
-        float deadzone = isChargingMode.load(std::memory_order_acquire) ? 
-                        CHARGING_CURRENT_DEADZONE : CURRENT_DISPLAY_DEADZONE;
-        
-        if(fabs(current) < deadzone) {
+        // Simple deadzone - same for all modes
+        if(fabs(current) < CURRENT_DISPLAY_DEADZONE) {
             current = 0.0f;
         }
         
-        // ATOMIC UPDATES ONLY - NO MUTEX!
+        // ATOMIC UPDATES - ALWAYS IMMEDIATE
         realtimeVoltage.store(voltage, std::memory_order_release);
         realtimeCurrent.store(current, std::memory_order_release);
         realtimeUpdateTime.store(receivedTime, std::memory_order_release);
         
-        // Update vehicle data directly (atomic enough for our purposes)
+        // Update vehicle data - ALWAYS IMMEDIATE
         vehicle.batteryVoltage = voltage;
         vehicle.batteryCurrent = current;
         vehicle.chargingCurrent = (current > 0.0f);
@@ -236,47 +223,31 @@ void parseCANMessage(twai_message_t &message) {
         return;
     }
     
-    // ========== PRIORITY 2: TEMPERATURES & MODE ==========
+    // ========== TEMPERATURES & MODE - NO RATE LIMITING ==========
     if(id == ID_CTRL_MOTOR && message.data_length_code >= 6) {
-        // Update dengan rate limiting
-        static unsigned long lastCtrlMotorUpdate = 0;
-        unsigned long updateInterval = isChargingMode.load(std::memory_order_acquire) ? 
-                                      2000 : 500;
-        
-        if(receivedTime - lastCtrlMotorUpdate > updateInterval) {
-            vehicle.tempCtrl = message.data[4];
-            vehicle.tempMotor = message.data[5];
-            vehicle.lastModeByte = message.data[1];
-            vehicle.lastMessageTime = receivedTime;
-            lastCtrlMotorUpdate = receivedTime;
-        }
+        // UPDATE IMMEDIATELY - no rate limiting
+        vehicle.tempCtrl = message.data[4];
+        vehicle.tempMotor = message.data[5];
+        vehicle.lastModeByte = message.data[1];
+        vehicle.lastMessageTime = receivedTime;
         return;
     }
     
-    // ID_BATT_5S: Battery temperature
+    // ========== BATTERY TEMPERATURE - NO RATE LIMITING ==========
     if(id == ID_BATT_5S && message.data_length_code >= 1) {
-        // Update dengan rate limiting
-        static unsigned long lastBattTempUpdate = 0;
-        unsigned long updateInterval = isChargingMode.load(std::memory_order_acquire) ? 
-                                      5000 : 2000;
-        
-        if(receivedTime - lastBattTempUpdate > updateInterval) {
-            vehicle.tempBatt = message.data[0];
-            vehicle.lastMessageTime = receivedTime;
-            lastBattTempUpdate = receivedTime;
-        }
+        // UPDATE IMMEDIATELY - no rate limiting
+        vehicle.tempBatt = message.data[0];
+        vehicle.lastMessageTime = receivedTime;
         return;
     }
     
-    // ========== IGNORE NON-ESSENTIAL MESSAGES DURING CHARGING ==========
-    if (isChargingMode.load(std::memory_order_acquire)) {
-        return; // Skip processing non-essential messages
-    }
+    // ========== NO IGNORE SECTION - ALL MESSAGES PROCESSED ==========
+    // We don't ignore any messages - everything is processed in real-time
 }
 #endif
 
 // =============================================
-// CAN TASK - ULTRA-LIGHT FOR CHARGING
+// CAN TASK - FAST & EFFICIENT
 // =============================================
 #ifdef ESP32
 void canTask(void *pvParameters) {
@@ -285,22 +256,20 @@ void canTask(void *pvParameters) {
     uint32_t lastStatsTime = millis();
     
     while(true) {
-        // Determine update rate based on charging mode
-        uint32_t taskDelay = isChargingMode.load(std::memory_order_acquire) ? 
-                            CAN_TASK_UPDATE_CHARGING_MS : CAN_TASK_UPDATE_DRIVING_MS;
+        // SAME update rate for all modes - we have capacitor now!
+        uint32_t taskDelay = CAN_UPDATE_RATE_DRIVING_MS;  // Use fast rate always
         
-        // Process messages dengan limits ketat
+        // Process ALL available messages - no artificial limits
         twai_message_t message;
         int processed = 0;
-        int maxMessages = isChargingMode.load(std::memory_order_acquire) ? 2 : 8;
         
-        while(processed < maxMessages && twai_receive(&message, 0) == ESP_OK) {
+        while(twai_receive(&message, 0) == ESP_OK) {
             parseCANMessage(message);
             processed++;
             localMsgCount++;
             
-            // Yield sangat sering saat charging
-            if (isChargingMode.load(std::memory_order_acquire) && processed % 1 == 0) {
+            // Yield occasionally to prevent watchdog, but not too often
+            if (processed % 20 == 0) {
                 taskYIELD();
             }
         }
@@ -313,22 +282,19 @@ void canTask(void *pvParameters) {
             lastStatsTime = currentTime;
         }
         
-        // Check charger timeout
+        // Check charger timeout - standard timeout
         if (oriChargerDetected.load(std::memory_order_acquire)) {
             if (currentTime - lastOriChargerMsgTime.load(std::memory_order_acquire) > CHARGER_TIMEOUT_MS) {
                 oriChargerDetected.store(false, std::memory_order_release);
                 
-                // Deactivate charging mode jika sudah timeout
+                // Deactivate charging mode if timeout
                 if (isChargingMode.load(std::memory_order_acquire)) {
-                    // Tunggu 10 detik lagi untuk pastikan
-                    if (currentTime - lastOriChargerMsgTime.load(std::memory_order_acquire) > 10000) {
-                        isChargingMode.store(false, std::memory_order_release);
-                    }
+                    isChargingMode.store(false, std::memory_order_release);
                 }
             }
         }
         
-        // Adaptive task delay
+        // Fast, consistent task delay
         vTaskDelayUntil(&xLastWakeTime, pdMS_TO_TICKS(taskDelay));
     }
 }
@@ -364,7 +330,7 @@ unsigned long getRealtimeUpdateTime() {
 bool isDataFresh() {
 #ifdef ESP32
     unsigned long lastUpdate = realtimeUpdateTime.load(std::memory_order_acquire);
-    uint32_t timeout = isChargingMode.load(std::memory_order_acquire) ? 5000 : 2000;
+    uint32_t timeout = DATA_FRESH_TIMEOUT_NORMAL_MS;  // Same timeout for all modes
     return (millis() - lastUpdate < timeout);
 #else
     return (millis() - vehicle.lastMessageTime < 2000);
@@ -372,63 +338,14 @@ bool isDataFresh() {
 }
 
 // =============================================
-// CHARGING MODE SPECIFIC GETTERS
-// =============================================
-float getChargingVoltage() {
-#ifdef ESP32
-    if (isChargingMode.load(std::memory_order_acquire)) {
-        // Simple moving average untuk charging
-        static float smoothedVoltage = 0.0f;
-        float currentVoltage = realtimeVoltage.load(std::memory_order_acquire);
-        
-        if (smoothedVoltage == 0.0f) {
-            smoothedVoltage = currentVoltage;
-        } else {
-            smoothedVoltage = smoothedVoltage * 0.95f + currentVoltage * 0.05f;
-        }
-        return smoothedVoltage;
-    }
-    return getRealtimeVoltage();
-#else
-    return vehicle.batteryVoltage;
-#endif
-}
-
-float getChargingCurrent() {
-#ifdef ESP32
-    if (isChargingMode.load(std::memory_order_acquire)) {
-        // Simple moving average untuk charging
-        static float smoothedCurrent = 0.0f;
-        float currentCurrent = realtimeCurrent.load(std::memory_order_acquire);
-        
-        if (smoothedCurrent == 0.0f) {
-            smoothedCurrent = currentCurrent;
-        } else {
-            smoothedCurrent = smoothedCurrent * 0.95f + currentCurrent * 0.05f;
-        }
-        return smoothedCurrent;
-    }
-    return getRealtimeCurrent();
-#else
-    return vehicle.batteryCurrent;
-#endif
-}
-
-// =============================================
-// COMPATIBILITY FUNCTIONS
+// BATTERY DATA GETTERS - NO SMOOTHING/AVERAGING
 // =============================================
 float getBatteryVoltage() {
-    if (isChargingModeActive()) {
-        return getChargingVoltage();
-    }
-    return getRealtimeVoltage();
+    return getRealtimeVoltage();  // Always real-time, no smoothing
 }
 
 float getBatteryCurrent() {
-    if (isChargingModeActive()) {
-        return getChargingCurrent();
-    }
-    return getRealtimeCurrent();
+    return getRealtimeCurrent();  // Always real-time, no smoothing
 }
 
 // =============================================
@@ -496,13 +413,8 @@ bool isChargingCurrent() {
 }
 
 void getBMSDataForDisplay(float &voltage, float &current, uint8_t &soc, bool &isCharging) {
-    if (isChargingModeActive()) {
-        voltage = getChargingVoltage();
-        current = getChargingCurrent();
-    } else {
-        voltage = getRealtimeVoltage();
-        current = getRealtimeCurrent();
-    }
+    voltage = getRealtimeVoltage();   // Real-time voltage
+    current = getRealtimeCurrent();   // Real-time current
     soc = 0;
     isCharging = isChargingCurrent();
 }
