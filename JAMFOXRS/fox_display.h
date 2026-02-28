@@ -2,6 +2,10 @@
 #define DISPLAY_H
 
 #include <Arduino.h>
+#include <Adafruit_SSD1306.h>
+#include <Fonts/FreeSansBold18pt7b.h>
+#include <Fonts/FreeSansBold12pt7b.h>
+#include <Fonts/FreeSansBold9pt7b.h>
 
 // Basic display functions
 void initDisplay();
@@ -12,6 +16,10 @@ void resetDisplayState();
 
 // Thread-safe display functions
 bool safeDisplayUpdate(int page);
+
+// NEW: Font reset and transition functions
+void resetDisplayFont();
+void transitionFromAppModeToClock();
 
 // Animation functions
 void updateAnimation();
@@ -31,8 +39,9 @@ void recoverI2CBus();
 
 // Display status
 extern bool displayReady;
+extern Adafruit_SSD1306 display;
 
-// NEW: Charging page check
+// Charging page check
 bool isChargingPageDisplayed();
 
 #endif
