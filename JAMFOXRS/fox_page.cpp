@@ -3,6 +3,7 @@
 #include "fox_display.h"
 #include "fox_canbus.h"
 #include "fox_serial.h"
+#include "fox_ble.h"
 
 // =============================================
 // GLOBAL VARIABLES
@@ -17,18 +18,15 @@ bool lastButton = HIGH;
 unsigned long lastButtonPress = 0;
 
 // =============================================
-// PAGE ORDER FUNCTIONS (NEW)
+// PAGE ORDER FUNCTIONS
 // =============================================
 int getNextPageInOrder(int currentPage) {
-    // Cari posisi currentPage dalam PAGE_ORDER
     for (int i = 0; i < PAGE_ORDER_COUNT; i++) {
         if (PAGE_ORDER[i] == currentPage) {
-            // Cari page enabled berikutnya (circular navigation)
             for (int j = 1; j <= PAGE_ORDER_COUNT; j++) {
                 int nextIndex = (i + j) % PAGE_ORDER_COUNT;
                 int nextPage = PAGE_ORDER[nextIndex];
                 
-                // Check if page is enabled
                 bool enabled = false;
                 switch (nextPage) {
                     case 1: enabled = PAGE_1_ENABLE; break;
@@ -41,17 +39,13 @@ int getNextPageInOrder(int currentPage) {
                     return nextPage;
                 }
             }
-            // Jika tidak ada page enabled lainnya, tetap di page ini
             return currentPage;
         }
     }
-    
-    // Jika currentPage tidak ada di PAGE_ORDER, cari page enabled pertama
     return getFirstEnabledPage();
 }
 
 int getFirstEnabledPage() {
-    // Cari page enabled pertama sesuai urutan
     for (int i = 0; i < PAGE_ORDER_COUNT; i++) {
         int page = PAGE_ORDER[i];
         
@@ -67,26 +61,18 @@ int getFirstEnabledPage() {
             return page;
         }
     }
-    
-    // Fallback jika tidak ada page yang enabled
     return 1;
 }
 
 // =============================================
-// MODE DETECTION - DISABLED
+// MODE DETECTION
 // =============================================
 void updateModeDetection() {
     currentSpecialMode = 0;
-    
-    static bool firstLog = true;
-    if(firstLog && debugModeEnabled) {
-        serialPrintf("[MODE] Detection disabled - Always NORMAL mode\n");
-        firstLog = false;
-    }
 }
 
 // =============================================
-// BUTTON FUNCTIONS (UPDATED WITH PAGE ORDER)
+// BUTTON FUNCTIONS - MODIFIED FOR BLE
 // =============================================
 void initButton() {
     pinMode(BUTTON_PIN, INPUT_PULLUP);
@@ -111,12 +97,48 @@ bool checkButtonPress() {
 }
 
 void handleButtonPress() {
+    unsigned long pressTime = millis();
+    bool isLongPress = false;
+    
+    // Tunggu sampai button dilepas atau timeout untuk long press
+    while (digitalRead(BUTTON_PIN) == LOW) {
+        delay(10);
+        if (millis() - pressTime >= BLE_ACTIVATION_HOLD_MS) {
+            isLongPress = true;
+            break;
+        }
+    }
+    
+    // LONG PRESS DETECTED
+    if (isLongPress) {
+        #ifdef ESP32
+        if (isBLEActive()) {
+            // Matikan BLE - akan menampilkan BLE OFF
+            deactivateBLE();
+            serialPrintflnAlways("[BUTTON] BLE deactivated");
+        } else {
+            // Aktifkan BLE - akan menampilkan APP MODE
+            activateBLE();
+            serialPrintflnAlways("[BUTTON] BLE activated - APP MODE");
+        }
+        #endif
+        return;
+    }
+    
+    // SHORT PRESS - Normal page switching (hanya jika BLE tidak aktif)
+    #ifdef ESP32
+    if (isBLEActive()) {
+        // Jika BLE aktif, short press tidak melakukan apa-apa
+        return;
+    }
+    #endif
+    
+    // Normal page switching code
     if (setupMode) {
         return;
     }
     
     #ifdef ESP32
-    // CHARGING MODE: Minimal delay
     if(isChargingModeActive()) {
         if(getChargerMessageAge() < 50) {
             return;
@@ -125,29 +147,25 @@ void handleButtonPress() {
     }
     #endif
     
-    // GUNAKAN SISTEM URUTAN PAGE BARU
     int nextPage = getNextPageInOrder(currentPage);
     
     if (nextPage != currentPage) {
         currentPage = nextPage;
         lastNormalPage = currentPage;
-        
-        // Fast display update
         safeDisplayUpdate(currentPage);
         
         if (debugModeEnabled) {
-            serialPrintf("[PAGE] Changed to page %d\n", currentPage);
+            serialPrintfln("[PAGE] Changed to page %d", currentPage);
         }
     }
 }
 
 // =============================================
-// PAGE MANAGEMENT (UPDATED)
+// PAGE MANAGEMENT
 // =============================================
 void switchToPage(int page) {
     if (page < 1 || page > 4) return;
     
-    // Validasi page enabled
     bool enabled = false;
     switch (page) {
         case 1: enabled = PAGE_1_ENABLE; break;
@@ -158,10 +176,10 @@ void switchToPage(int page) {
     
     if (!enabled) {
         if (debugModeEnabled) {
-            serialPrintf("[PAGE] Page %d is disabled\n", page);
+            serialPrintfln("[PAGE] Page %d is disabled", page);
         }
         return;
-        }
+    }
     
     currentPage = page;
     lastNormalPage = currentPage;
@@ -169,7 +187,7 @@ void switchToPage(int page) {
     safeDisplayUpdate(currentPage);
     
     if (debugModeEnabled) {
-        serialPrintf("[PAGE] Manual switch to page %d\n", page);
+        serialPrintfln("[PAGE] Manual switch to page %d", page);
     }
 }
 
