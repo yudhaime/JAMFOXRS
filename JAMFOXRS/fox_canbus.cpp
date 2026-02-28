@@ -63,7 +63,7 @@ bool initCAN() {
         .clkout_io = TWAI_IO_UNUSED,
         .bus_off_io = TWAI_IO_UNUSED,
         .tx_queue_len = 0,
-        .rx_queue_len = 20,  // INCREASED for smooth data flow
+        .rx_queue_len = 20,
         .alerts_enabled = TWAI_ALERT_NONE,
         .clkout_divider = 0
     };
@@ -117,7 +117,7 @@ bool isOriChargerActive() {
 
 uint32_t getChargerMessageAge() {
     if (!oriChargerDetected.load(std::memory_order_acquire)) {
-        return 0xFFFFFFFF; // Not active
+        return 0xFFFFFFFF;
     }
     return millis() - lastOriChargerMsgTime.load(std::memory_order_acquire);
 }
@@ -138,18 +138,14 @@ void resetSystemErrorCount() {
     systemErrorCount.store(0, std::memory_order_release);
 }
 
-// =============================================
-// CHARGING PAGE HELPER FUNCTIONS
-// =============================================
 bool isChargingPageEnabled() {
     return CHARGING_PAGE_ENABLED;
 }
 
 // =============================================
-// SPAM MESSAGE DETECTION - MINIMAL
+// SPAM MESSAGE DETECTION
 // =============================================
 bool isSpamChargerMessage(uint32_t id) {
-    // Only detect actual spam IDs, no aggressive filtering
     if (id == ORI_CHARGER_SPAM_ID) return true;
     if (id == CHARGER_DATA_ID_1 || id == CHARGER_DATA_ID_2) return true;
     if (id == BMS_CHARGING_FLAG) return true;
@@ -157,7 +153,7 @@ bool isSpamChargerMessage(uint32_t id) {
 }
 
 // =============================================
-// REAL-TIME CAN PARSING - NO ARTIFICIAL DELAYS
+// REAL-TIME CAN PARSING - LENGKAP
 // =============================================
 void parseCANMessage(twai_message_t &message) {
     uint32_t id = message.identifier;
@@ -169,15 +165,13 @@ void parseCANMessage(twai_message_t &message) {
     // Count total messages
     canMessageCount.fetch_add(1, std::memory_order_relaxed);
     
-    // ========== CHARGER DETECTION - NO RATE LIMITING ==========
-    if (isSpamChargerMessage(id)) {
-        // Update charger status IMMEDIATELY - no rate limiting
+    // ========== CHARGER DETECTION ==========
+    if (id == ORI_CHARGER_SPAM_ID || id == CHARGER_DATA_ID_1 || id == CHARGER_DATA_ID_2 || id == BMS_CHARGING_FLAG) {
         if (id == ORI_CHARGER_SPAM_ID) {
             oriChargerDetected.store(true, std::memory_order_release);
             lastOriChargerMsgTime.store(receivedTime, std::memory_order_release);
             oriChargerMessageCount.fetch_add(1, std::memory_order_relaxed);
             
-            // Auto-activate charging mode HANYA JIKA charging page ENABLED
             if (CHARGING_PAGE_ENABLED && !isChargingMode.load(std::memory_order_acquire)) {
                 isChargingMode.store(true, std::memory_order_release);
             }
@@ -187,79 +181,199 @@ void parseCANMessage(twai_message_t &message) {
             chargerMessageCount.fetch_add(1, std::memory_order_relaxed);
         }
         
-        // Continue processing - don't early exit for messages that also contain data
+        // Update vehicle charger data
+        vehicle.chargerConnected = chargerConnected.load();
+        vehicle.oriChargerDetected = oriChargerDetected.load();
+        vehicle.lastChargerMessage = receivedTime;
+        
+        // Jangan return untuk message yang juga mengandung data
         if (id != ID_VOLTAGE_CURRENT && id != ID_CTRL_MOTOR && id != ID_BATT_5S) {
-            return; // Only exit for pure spam messages with no data
+            return;
         }
     }
     
-    // ========== VOLTAGE & CURRENT - ALWAYS REAL-TIME ==========
-    if(id == ID_VOLTAGE_CURRENT && message.data_length_code >= 8) {
-        // Voltage parsing
+    // ========== CHARGER DATA (0x1810D0F3 or 0x1811D0F3) ==========
+    if ((id == 0x1810D0F3 || id == 0x1811D0F3) && message.data_length_code >= 5) {
         uint16_t vRaw = (uint16_t)((message.data[0] << 8) | message.data[1]);
+        vehicle.chargerVoltage = vRaw * 0.1f;
+        
+        uint16_t iRaw = (uint16_t)((message.data[2] << 8) | message.data[3]);
+        vehicle.chargerCurrent = iRaw * 0.1f;
+        
+        vehicle.chargerStatus = message.data[4];
+        vehicle.chargerConnected = true;
+        vehicle.lastChargerMessage = receivedTime;
+        return;
+    }
+    
+    // ========== CONTROLLER BASIC (0x0A010810) ==========
+    if(id == 0x0A010810 && message.data_length_code >= 8) {
+        uint8_t m = message.data[1];
+        
+        // Mode
+        vehicle.lastModeByte = m;
+        
+        // RPM dan Speed
+        vehicle.rpm = message.data[2] | (message.data[3] << 8);
+        vehicle.speed = (int)(vehicle.rpm * 0.1033f); // Approx conversion
+        
+        // Temperatures
+        vehicle.tempCtrl = message.data[4];
+        vehicle.tempMotor = message.data[5];
+        vehicle.lastMessageTime = receivedTime;
+        return;
+    }
+    
+    // ========== BMS TEMPERATURES (0x0E6C0D09) ==========
+    if (id == 0x0E6C0D09 && message.data_length_code >= 5) {
+        int sum = 0;
+        for (int i = 0; i < 5; i++) {
+            vehicle.cellTemps[i] = message.data[i];  // direct °C
+            sum += (int)vehicle.cellTemps[i];
+        }
+        vehicle.tempBatt = sum / 5;
+        vehicle.lastMessageTime = receivedTime;
+        return;
+    }
+    
+    // ========== VOLTAGE & CURRENT (0x0A6D0D09) ==========
+    if(id == ID_VOLTAGE_CURRENT && message.data_length_code >= 8) {
+        // Voltage
+        uint16_t vRaw = (uint16_t)((message.data[0] << 8) | message.data[1]);
+        vehicle.rawVoltageHex = vRaw;
         float voltage = vRaw * 0.1f;
         
-        // Current parsing
+        // Current (signed)
         uint16_t iRawU = (uint16_t)((message.data[2] << 8) | message.data[3]);
+        vehicle.rawCurrentHex = iRawU;
         int16_t iRawS = (int16_t)iRawU;
         float current = iRawS * 0.1f;
         
-        // Simple deadzone - same for all modes
+        // Deadzone
         if(fabs(current) < CURRENT_DISPLAY_DEADZONE) {
             current = 0.0f;
         }
         
-        // ATOMIC UPDATES - ALWAYS IMMEDIATE
+        // Capacity
+        uint16_t remainCap = (uint16_t)((message.data[4] << 8) | message.data[5]);
+        vehicle.remainingCapacity = remainCap * 0.1f;
+        
+        uint16_t fullCap = (uint16_t)((message.data[6] << 8) | message.data[7]);
+        vehicle.fullCapacity = fullCap * 0.1f;
+        
+        // Atomic updates
         realtimeVoltage.store(voltage, std::memory_order_release);
         realtimeCurrent.store(current, std::memory_order_release);
         realtimeUpdateTime.store(receivedTime, std::memory_order_release);
         
-        // Update vehicle data - ALWAYS IMMEDIATE
+        // Update vehicle data
         vehicle.batteryVoltage = voltage;
         vehicle.batteryCurrent = current;
-        vehicle.chargingCurrent = (current > 0.0f);
+        vehicle.chargingCurrent = (current > 1.0f);
         vehicle.lastMessageTime = receivedTime;
         
         return;
     }
     
-    // ========== TEMPERATURES & MODE - NO RATE LIMITING ==========
-    if(id == ID_CTRL_MOTOR && message.data_length_code >= 6) {
-        // UPDATE IMMEDIATELY - no rate limiting
-        vehicle.tempCtrl = message.data[4];
-        vehicle.tempMotor = message.data[5];
-        vehicle.lastModeByte = message.data[1];
+    // ========== BATTERY HEALTH & SOC (0x0A6E0D09) ==========
+    if(id == 0x0A6E0D09 && message.data_length_code >= 6) {
+        uint16_t socVal = (uint16_t)((message.data[0] << 8) | message.data[1]);
+        vehicle.rawSOCHex = socVal;
+        
+        // Gunakan lookup table untuk SOC yang akurat
+        vehicle.batterySOC = (int)getSoCFromLookup(socVal);
+        if(vehicle.batterySOC > 100) vehicle.batterySOC = 100;
+        if(vehicle.batterySOC < 0) vehicle.batterySOC = 0;
+        
+        uint16_t sohVal = (uint16_t)((message.data[2] << 8) | message.data[3]);
+        vehicle.batterySOH = (int)(sohVal * 0.1f);
+        if(vehicle.batterySOH > 100) vehicle.batterySOH = 100;
+        
+        vehicle.batteryCycleCount = (uint16_t)((message.data[4] << 8) | message.data[5]);
         vehicle.lastMessageTime = receivedTime;
         return;
     }
     
-    // ========== BATTERY TEMPERATURE - NO RATE LIMITING ==========
-    if(id == ID_BATT_5S && message.data_length_code >= 1) {
-        // UPDATE IMMEDIATELY - no rate limiting
-        vehicle.tempBatt = message.data[0];
+    // ========== CELL VOLTAGE STATS (0x0A6F0D09) ==========
+    if(id == 0x0A6F0D09 && message.data_length_code >= 8) {
+        vehicle.cellHighestVolt = (uint16_t)((message.data[0] << 8) | message.data[1]);
+        vehicle.cellHighestNum = message.data[2];
+        vehicle.cellLowestVolt = (uint16_t)((message.data[3] << 8) | message.data[4]);
+        vehicle.cellLowestNum = message.data[5];
+        vehicle.cellAvgVolt = (uint16_t)((message.data[6] << 8) | message.data[7]);
+        vehicle.cellDelta = vehicle.cellHighestVolt - vehicle.cellLowestVolt;
         vehicle.lastMessageTime = receivedTime;
         return;
     }
     
-    // ========== NO IGNORE SECTION - ALL MESSAGES PROCESSED ==========
-    // We don't ignore any messages - everything is processed in real-time
+    // ========== TEMPERATURE STATS (0x0A700D09) ==========
+    if(id == 0x0A700D09 && message.data_length_code >= 6) {
+        vehicle.tempMax = message.data[0];
+        vehicle.tempMaxCell = message.data[1];
+        vehicle.tempMin = message.data[4];
+        vehicle.tempMinCell = message.data[5];
+        vehicle.lastMessageTime = receivedTime;
+        return;
+    }
+    
+    // ========== BALANCE STATUS (0x0A730D09) ==========
+    if(id == 0x0A730D09 && message.data_length_code >= 6) {
+        vehicle.balanceMode = message.data[0];
+        vehicle.balanceStatus = message.data[1];
+        vehicle.balanceBits[0] = message.data[2];
+        vehicle.balanceBits[1] = message.data[3];
+        vehicle.balanceBits[2] = message.data[4];
+        vehicle.balanceBits[3] = message.data[5];
+        
+        char buff[20];
+        snprintf(buff, sizeof(buff), "%02X %02X %02X %02X %02X %02X",
+                 message.data[0], message.data[1], message.data[2], 
+                 message.data[3], message.data[4], message.data[5]);
+        vehicle.rawBalanceHex = String(buff);
+        vehicle.lastMessageTime = receivedTime;
+        return;
+    }
+    
+    // ========== CELL VOLTAGES BLOCKS (0x0E64-0x0E69) ==========
+    if ((id & 0xFFF0FFFF) == 0x0E600D09) {
+        int baseIndex = -1;
+        switch (id) {
+            case 0x0E640D09: baseIndex = 0;  break;
+            case 0x0E650D09: baseIndex = 4;  break;
+            case 0x0E660D09: baseIndex = 8;  break;
+            case 0x0E670D09: baseIndex = 12; break;
+            case 0x0E680D09: baseIndex = 16; break;
+            case 0x0E690D09: baseIndex = 20; break;
+            default: break;
+        }
+        if (baseIndex >= 0) {
+            for (int i = 0; i < 4 && (baseIndex + i) < MAX_CELLS; i++) {
+                int off = i * 2;
+                if (off + 1 < message.data_length_code) {
+                    vehicle.cellVoltages[baseIndex + i] = 
+                        (uint16_t)((message.data[off] << 8) | message.data[off + 1]);
+                }
+            }
+            
+            // Update statistics setiap kali dapat data cell baru
+            updateCellStatistics();
+        }
+        vehicle.lastMessageTime = receivedTime;
+        return;
+    }
 }
-#endif
 
 // =============================================
 // CAN TASK - FAST & EFFICIENT
 // =============================================
-#ifdef ESP32
 void canTask(void *pvParameters) {
     TickType_t xLastWakeTime = xTaskGetTickCount();
     uint32_t localMsgCount = 0;
     uint32_t lastStatsTime = millis();
     
     while(true) {
-        // SAME update rate for all modes - we have capacitor now!
-        uint32_t taskDelay = CAN_UPDATE_RATE_DRIVING_MS;  // Use fast rate always
+        uint32_t taskDelay = CAN_UPDATE_RATE_DRIVING_MS;
         
-        // Process ALL available messages - no artificial limits
         twai_message_t message;
         int processed = 0;
         
@@ -268,13 +382,11 @@ void canTask(void *pvParameters) {
             processed++;
             localMsgCount++;
             
-            // Yield occasionally to prevent watchdog, but not too often
             if (processed % 20 == 0) {
                 taskYIELD();
             }
         }
         
-        // Update statistics every second
         uint32_t currentTime = millis();
         if(currentTime - lastStatsTime >= 1000) {
             canMessagesPerSecond.store(localMsgCount, std::memory_order_release);
@@ -282,19 +394,16 @@ void canTask(void *pvParameters) {
             lastStatsTime = currentTime;
         }
         
-        // Check charger timeout - standard timeout
         if (oriChargerDetected.load(std::memory_order_acquire)) {
             if (currentTime - lastOriChargerMsgTime.load(std::memory_order_acquire) > CHARGER_TIMEOUT_MS) {
                 oriChargerDetected.store(false, std::memory_order_release);
                 
-                // Deactivate charging mode if timeout
                 if (isChargingMode.load(std::memory_order_acquire)) {
                     isChargingMode.store(false, std::memory_order_release);
                 }
             }
         }
         
-        // Fast, consistent task delay
         vTaskDelayUntil(&xLastWakeTime, pdMS_TO_TICKS(taskDelay));
     }
 }
@@ -330,27 +439,21 @@ unsigned long getRealtimeUpdateTime() {
 bool isDataFresh() {
 #ifdef ESP32
     unsigned long lastUpdate = realtimeUpdateTime.load(std::memory_order_acquire);
-    uint32_t timeout = DATA_FRESH_TIMEOUT_NORMAL_MS;  // Same timeout for all modes
+    uint32_t timeout = DATA_FRESH_TIMEOUT_NORMAL_MS;
     return (millis() - lastUpdate < timeout);
 #else
     return (millis() - vehicle.lastMessageTime < 2000);
 #endif
 }
 
-// =============================================
-// BATTERY DATA GETTERS - NO SMOOTHING/AVERAGING
-// =============================================
 float getBatteryVoltage() {
-    return getRealtimeVoltage();  // Always real-time, no smoothing
+    return getRealtimeVoltage();
 }
 
 float getBatteryCurrent() {
-    return getRealtimeCurrent();  // Always real-time, no smoothing
+    return getRealtimeCurrent();
 }
 
-// =============================================
-// CHARGER DETECTION FUNCTIONS
-// =============================================
 bool isChargerConnected() {
 #ifdef ESP32
     return chargerConnected.load(std::memory_order_acquire);
@@ -367,9 +470,6 @@ bool isOriChargerDetected() {
 #endif
 }
 
-// =============================================
-// TEMPERATURE GETTERS
-// =============================================
 int getTempCtrl() {
     return vehicle.tempCtrl;
 }
@@ -382,9 +482,6 @@ int getTempBatt() {
     return vehicle.tempBatt;
 }
 
-// =============================================
-// MODE DATA GETTERS
-// =============================================
 uint8_t getCurrentModeByte() {
     return vehicle.lastModeByte;
 }
@@ -401,11 +498,8 @@ bool isCutoffMode() {
     return false;
 }
 
-// =============================================
-// OTHER GETTERS
-// =============================================
 uint8_t getBatterySOC() {
-    return 0;
+    return vehicle.batterySOC;
 }
 
 bool isChargingCurrent() {
@@ -413,15 +507,12 @@ bool isChargingCurrent() {
 }
 
 void getBMSDataForDisplay(float &voltage, float &current, uint8_t &soc, bool &isCharging) {
-    voltage = getRealtimeVoltage();   // Real-time voltage
-    current = getRealtimeCurrent();   // Real-time current
-    soc = 0;
+    voltage = getRealtimeVoltage();
+    current = getRealtimeCurrent();
+    soc = vehicle.batterySOC;
     isCharging = isChargingCurrent();
 }
 
-// =============================================
-// STATISTICS
-// =============================================
 uint32_t getCANMessageCount() {
 #ifdef ESP32
     return canMessageCount.load(std::memory_order_acquire);
@@ -447,23 +538,19 @@ void resetCANStatistics() {
 
 void resetCANData() {
 #ifdef ESP32
-    // Reset atomic variables
     realtimeVoltage.store(0.0f);
     realtimeCurrent.store(0.0f);
     realtimeUpdateTime.store(0);
     
-    // Reset charger states
     chargerConnected.store(false);
     oriChargerDetected.store(false);
     lastChargerMsgTime.store(0);
     lastOriChargerMsgTime.store(0);
     isChargingMode.store(false);
     
-    // Reset statistics
     resetCANStatistics();
 #endif
     
-    // Reset vehicle data
     vehicle.batteryVoltage = 0.0f;
     vehicle.batteryCurrent = 0.0f;
     vehicle.tempCtrl = DEFAULT_TEMP;
