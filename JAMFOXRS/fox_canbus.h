@@ -45,8 +45,6 @@ bool isOriChargerActive();
 uint32_t getChargerMessageAge();
 void setChargingMode(bool enable);
 void updateSystemHealth();
-
-// NEW: Charging page enabled check
 bool isChargingPageEnabled();
 
 // =============================================
@@ -57,10 +55,6 @@ float getRealtimeCurrent();
 unsigned long getRealtimeUpdateTime();
 bool isDataFresh();
 
-// Charging mode getters
-float getChargingVoltage();
-float getChargingCurrent();
-
 // =============================================
 // COMPATIBILITY FUNCTIONS
 // =============================================
@@ -68,14 +62,14 @@ float getBatteryVoltage();
 float getBatteryCurrent();
 
 // =============================================
-// TEMPERATURE GETTERS (ENABLED)
+// TEMPERATURE GETTERS
 // =============================================
 int getTempCtrl();
 int getTempMotor();
 int getTempBatt();
 
 // =============================================
-// MODE DATA GETTERS (COMPATIBILITY)
+// MODE DATA GETTERS
 // =============================================
 uint8_t getCurrentModeByte();
 bool isSportMode();
@@ -89,8 +83,6 @@ uint8_t getBatterySOC();
 bool isChargingCurrent();
 bool isChargerConnected();
 bool isOriChargerDetected();
-
-// Data access for display
 void getBMSDataForDisplay(float &voltage, float &current, uint8_t &soc, bool &isCharging);
 
 // =============================================
@@ -105,5 +97,10 @@ void resetCANStatistics();
 // =============================================
 uint32_t getSystemErrorCount();
 void resetSystemErrorCount();
+
+// =============================================
+// SOC LOOKUP
+// =============================================
+float getSoCFromLookup(uint16_t raw);
 
 #endif
