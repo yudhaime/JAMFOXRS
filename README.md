@@ -17,7 +17,7 @@ Jika kode ini membantu mungkin sedikit donasi akan sangat saya hargai
 - Menampilkan voltase dan arus baterai
 - Menampilkan daya baterai dalam watt
 - Pindah Halaman layar dengan menakan tombol
-
+- Support aplikasi Unoficial Polyron EV (https://github.com/zexry619/pev-app-release/releases/)
 
 ## 🔩 Bahan/Alat yang Dibutuhkan
 - ESP32 DOIT DEVKIT V1
@@ -248,7 +248,10 @@ https://espressif.github.io/arduino-esp32/package_esp32_index.json
 ## Struktur File Projek
 
 ```JAMFOXRSV1
-├── JAMFOXRSV1.ino          # Main sketch
+📁JAMFOXRS
+├── JAMFOXRS.ino            # File Utama
+├── fox_ble.h               # Header untuk BLE
+├── fox_ble.cpp             # Fungsi untuk aplikasi via BLE
 ├── fox_canbus.h            # Header CAN bus
 ├── fox_canbus.cpp          # Implementasi CAN bus
 ├── fox_config.h            # Konfigurasi pin, label teks, posisi teks, dll
@@ -320,6 +323,11 @@ Day mapping: 1=MINGGU, 2=SENIN, 3=SELASA,
 ##### Ketik DAY lalu diikuti angka 1-7 lalu enter
 
 ```contoh: DAY 1 akan set hari ke Minggu```
+
+## 📱 Cara Menghubungkan Ke Aplikasi Unoficial Polytron EV
+- Tekan tahan tombol sekitar 5-7 detik hingga muncul tulisan "APP MODE" di OLED Display
+- Koneksikan modul melalui aplikasi Unoficial Polyron EV (https://github.com/zexry619/pev-app-release/releases/)
+- Untuk keluar dari mode aplikasi tekan tahan tombol 5-7 detik hingga muncul tulisan "BLE OFF"
 
 
 ## ⚠️ Safety Warning
