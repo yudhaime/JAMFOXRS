@@ -6,6 +6,7 @@
 #include "fox_canbus.h"
 #include "fox_serial.h"
 #include "fox_page.h"
+#include "fox_ble.h"
 #include <Fonts/FreeSansBold18pt7b.h>
 #include <Fonts/FreeSansBold12pt7b.h>
 #include <Fonts/FreeSansBold9pt7b.h>
@@ -34,7 +35,7 @@ static unsigned long lastI2CFailure = 0;
 static uint32_t i2cFailureCount = 0;
 
 // =============================================
-// ANIMATION VARIABLES - ENHANCED
+// ANIMATION VARIABLES
 // =============================================
 static float animatedVoltage = 0.0f;
 static float animatedCurrent = 0.0f;
@@ -45,11 +46,10 @@ static float targetPower = 0.0f;
 static unsigned long lastAnimationUpdate = 0;
 static bool animationInitialized = false;
 
-// Enhanced animation untuk responsif
 static float currentVelocity = 0.0f;
-static const float MAX_VELOCITY = 5.0f;    // Maximum change per second
-static const float ACCELERATION = 10.0f;   // Acceleration rate
-static const float DAMPING = 0.9f;         // Damping factor
+static const float MAX_VELOCITY = 5.0f;
+static const float ACCELERATION = 10.0f;
+static const float DAMPING = 0.9f;
 
 // =============================================
 // I2C RECOVERY FUNCTIONS
@@ -248,7 +248,6 @@ void updateAnimationTargets() {
         return;
     }
     
-    // Update targets dengan threshold
     if(fabs(newVoltage - targetVoltage) > VOLTAGE_CHANGE_THRESHOLD) {
         targetVoltage = newVoltage;
     }
@@ -266,10 +265,9 @@ void updateAnimation() {
     unsigned long now = millis();
     if(now - lastAnimationUpdate < ANIMATION_INTERVAL_MS) return;
     
-    float deltaTime = (now - lastAnimationUpdate) / 1000.0f; // Convert to seconds
+    float deltaTime = (now - lastAnimationUpdate) / 1000.0f;
     lastAnimationUpdate = now;
     
-    // Smooth voltage animation
     if(fabs(targetVoltage - animatedVoltage) > 0.01f) {
         animatedVoltage = animatedVoltage + (targetVoltage - animatedVoltage) * ANIMATION_SMOOTHNESS;
         if(fabs(targetVoltage - animatedVoltage) < 0.05f) {
@@ -277,42 +275,32 @@ void updateAnimation() {
         }
     }
     
-    // ENHANCED CURRENT ANIMATION dengan physics-based
     float currentDiff = targetCurrent - animatedCurrent;
     
     if(fabs(currentDiff) > CURRENT_CHANGE_THRESHOLD) {
-        // Calculate acceleration towards target
         float acceleration = currentDiff * ACCELERATION;
-        
-        // Update velocity dengan acceleration dan damping
         currentVelocity = currentVelocity * DAMPING + acceleration * deltaTime;
         
-        // Clamp velocity
         if(currentVelocity > MAX_VELOCITY) currentVelocity = MAX_VELOCITY;
         if(currentVelocity < -MAX_VELOCITY) currentVelocity = -MAX_VELOCITY;
         
-        // Update animated current
         animatedCurrent += currentVelocity * deltaTime;
         
-        // Snap to target jika sudah dekat
         if(fabs(currentDiff) < 0.05f) {
             animatedCurrent = targetCurrent;
             currentVelocity = 0.0f;
         }
         
-        // Prevent overshoot
         if((targetCurrent > animatedCurrent && currentDiff < 0) || 
            (targetCurrent < animatedCurrent && currentDiff > 0)) {
             animatedCurrent = targetCurrent;
             currentVelocity = 0.0f;
         }
     } else {
-        // Jika sudah dekat, langsung set ke target
         animatedCurrent = targetCurrent;
         currentVelocity = 0.0f;
     }
     
-    // Smooth power animation
     if(fabs(targetPower - animatedPower) > 1.0f) {
         animatedPower = animatedPower + (targetPower - animatedPower) * ANIMATION_SMOOTHNESS;
         if(fabs(targetPower - animatedPower) < 5.0f) {
@@ -415,26 +403,96 @@ void initDisplay() {
     serialPrintf("[DISPLAY] ERROR: Failed to initialize\n");
 }
 
-bool safeDisplayUpdate(int page) {
-    if(!displayInitialized || !displayReady) return false;
+// =============================================
+// FUNGSI RESET FONT DISPLAY
+// =============================================
+void resetDisplayFont() {
+    if (!displayInitialized) return;
     
-    if(!safeI2COperation(I2C_MUTEX_TIMEOUT_MS)) return false;
-    
-    bool success = false;
-    #ifdef ESP32
-    try {
-        updateDisplay(page);
-        success = true;
-    } catch(...) {
-        success = false;
+    if (safeI2COperation(I2C_MUTEX_TIMEOUT_MS)) {
+        display.setFont();
+        display.setTextSize(1);
+        display.setTextColor(SSD1306_WHITE);
+        display.setTextWrap(false);
+        display.setCursor(0, 0);
+        releaseI2C();
     }
-    #else
-    updateDisplay(page);
-    success = true;
+}
+
+// =============================================
+// TRANSISI HALUS DARI APP MODE KE JAM
+// =============================================
+void transitionFromAppModeToClock() {
+    if (!displayInitialized || !displayReady) return;
+    
+    serialPrintfln("[DISPLAY] Starting smooth transition");
+    
+    if (safeI2COperation(I2C_MUTEX_TIMEOUT_MS)) {
+        
+        // Reset font dulu
+        display.setFont();
+        display.setTextSize(1);
+        
+        display.clearDisplay();
+        display.display();
+        delay(20);
+        
+        resetDisplayState();
+        delay(10);
+        
+        RTCDateTime dt = getRTC();
+        
+        display.setFont(&FreeSansBold18pt7b);
+        display.setCursor(CLOCK_TIME_POS_X, CLOCK_TIME_POS_Y);
+        display.printf("%02d:%02d", dt.hour, dt.minute);
+        
+        display.setFont();
+        display.setTextSize(1);
+        
+        int hariIndex = dt.dayOfWeek - 1;
+        if(hariIndex < 0) hariIndex = 0;
+        if(hariIndex > 6) hariIndex = 6;
+        
+        int bulanIndex = dt.month - 1;
+        if(bulanIndex < 0) bulanIndex = 0;
+        if(bulanIndex > 11) bulanIndex = 11;
+        
+        display.setCursor(CLOCK_DAY_POS_X, CLOCK_DAY_POS_Y);
+        display.print(DAY_NAMES[hariIndex]);
+        
+        display.setCursor(CLOCK_DATE_POS_X, CLOCK_DATE_POS_Y);
+        display.printf("%d %s", dt.day, MONTH_NAMES[bulanIndex]);
+        
+        display.setCursor(CLOCK_YEAR_POS_X, CLOCK_YEAR_POS_Y);
+        display.printf("%04d", dt.year);
+        
+        display.display();
+        delay(10);
+        display.display();
+        
+        releaseI2C();
+        
+        serialPrintfln("[DISPLAY] Transition complete");
+    } else {
+        serialPrintfln("[DISPLAY] ERROR: Cannot get I2C for transition");
+    }
+}
+
+// =============================================
+// safeDisplayUpdate
+// =============================================
+bool safeDisplayUpdate(int page) {
+    #ifdef ESP32
+    if (isInAppMode()) {
+        return false;
+    }
     #endif
     
-    releaseI2C();
-    return success;
+    if(!displayInitialized || !displayReady) return false;
+    
+    updateDisplay(page);
+    
+    return true;
 }
 
 void resetDisplay() {
@@ -447,32 +505,39 @@ void resetDisplay() {
     }
 }
 
+// =============================================
+// updateDisplay
+// =============================================
 void updateDisplay(int page) {
     if(!displayInitialized) return;
+    
+    #ifdef ESP32
+    if (isInAppMode()) {
+        return;
+    }
+    #endif
+    
+    if (!safeI2COperation(10)) {
+        serialPrintfln("[DISPLAY] I2C busy, skipping update");
+        return;
+    }
     
     resetDisplayState();
     display.clearDisplay();
     display.setTextColor(SSD1306_WHITE);
     
-    // ============================================
-    // CHARGING MODE: SIMPLE DISPLAY (CONDITIONAL)
-    // ============================================
     #ifdef ESP32
     if(isChargingModeActive() && CHARGING_PAGE_ENABLED) {
         display.setTextSize(2);
         display.setCursor(0, 0);
         display.print("LOCKED");
-        
         display.display();
-        return;  // EXIT - TIDAK PROSES PAGE NORMAL
+        releaseI2C();
+        return;
     }
     #endif
     
-    // ============================================
-    // NORMAL DISPLAY MODE
-    // ============================================
     if(page == 1) {
-        // Page 1: Clock
         RTCDateTime dt = getRTC();
         
         display.setFont(&FreeSansBold18pt7b);
@@ -500,7 +565,6 @@ void updateDisplay(int page) {
         display.printf("%04d", dt.year);
         
     } else if(page == 2) {
-        // Page 2: Temperature
         display.setTextSize(1);
         
         display.setCursor(TEMP_LABEL_ECU_POS_X, TEMP_LABEL_ECU_POS_Y);
@@ -519,19 +583,16 @@ void updateDisplay(int page) {
         display.print(getTempBatt());
         
     } else if(page == 3) {
-        // Page 3: BMS Data - DENGAN ANIMASI SMOOTH
         #ifdef ESP32
         if(!isChargingModeActive()) {
             updateAnimationTargets();
-            updateAnimation(); // PASTIKAN ANIMASI UPDATE TERPANGGIL
+            updateAnimation();
         }
         #endif
         
-        // GUNAKAN ANIMATED VALUES, BUKAN REAL-TIME
         float displayVoltage = animatedVoltage;
         float displayCurrent = animatedCurrent;
         
-        // ========== VOLTAGE DISPLAY ==========
         display.setTextSize(1);
         display.setCursor(BMS_LABEL_VOLTAGE_POS_X, BMS_LABEL_VOLTAGE_POS_Y);
         display.print(BMS_LABEL_VOLTAGE);
@@ -546,7 +607,6 @@ void updateDisplay(int page) {
         display.setCursor(BMS_VALUE_VOLTAGE_POS_X + voltageWidth + 6, BMS_VALUE_VOLTAGE_POS_Y + 6);
         display.print("V");
         
-        // ========== CURRENT DISPLAY ==========
         display.setTextSize(1);
         display.setCursor(BMS_LABEL_CURRENT_POS_X, BMS_LABEL_CURRENT_POS_Y);
         display.print(BMS_LABEL_CURRENT);
@@ -554,7 +614,6 @@ void updateDisplay(int page) {
         bool dataFresh = isDataFresh();
         
         if(!dataFresh && fabs(displayCurrent) < 0.1f) {
-            // Tampilkan "--" jika data tidak fresh
             display.setTextSize(2);
             display.setCursor(BMS_VALUE_CURRENT_POS_X + 12, BMS_VALUE_CURRENT_POS_Y);
             display.print("0");
@@ -563,14 +622,12 @@ void updateDisplay(int page) {
             display.setCursor(BMS_VALUE_CURRENT_POS_X + 40, BMS_VALUE_CURRENT_POS_Y + 6);
             display.print("A");
         } else {
-            // Apply deadzone
             float deadzone = CURRENT_DISPLAY_DEADZONE;
             #ifdef ESP32
             if(isChargingModeActive()) deadzone = CHARGING_CURRENT_DEADZONE;
             #endif
             
             if(fabs(displayCurrent) < deadzone) {
-                // CURRENT = 0A
                 display.setTextSize(2);
                 display.setCursor(BMS_VALUE_CURRENT_POS_X + 12, BMS_VALUE_CURRENT_POS_Y);
                 display.print("0");
@@ -579,14 +636,10 @@ void updateDisplay(int page) {
                 display.setCursor(118, BMS_VALUE_CURRENT_POS_Y + 6);
                 display.print("A");
             } else {
-                // Format animated current
                 String currentStr = formatCurrent(displayCurrent);
                 bool isNegative = (displayCurrent < -deadzone);
                 
-                // Hitung digit count
                 int digitCount = currentStr.length();
-                
-                // Tentukan X position
                 int currentX = BMS_VALUE_CURRENT_POS_X;
                 
                 if (digitCount == 1) currentX += 12;
@@ -594,19 +647,16 @@ void updateDisplay(int page) {
                 else if (digitCount == 3) currentX += 0;
                 else currentX -= 6;
                 
-                // Tampilkan tanda -
                 if (isNegative) {
                     display.setTextSize(1);
                     display.setCursor(currentX - 8, BMS_VALUE_CURRENT_POS_Y + 6);
                     display.print("-");
                 }
                 
-                // Tampilkan angka ANIMATED
                 display.setTextSize(2);
                 display.setCursor(currentX, BMS_VALUE_CURRENT_POS_Y);
                 display.print(currentStr);
                 
-                // Tampilkan "A"
                 display.setTextSize(1);
                 int unitX;
                 
@@ -622,7 +672,6 @@ void updateDisplay(int page) {
             }
         }
         
-        // ========== FRESHNESS INDICATOR ==========
         display.setCursor(120, 0);
         if(isDataFresh()) 
             display.print("");
@@ -630,7 +679,6 @@ void updateDisplay(int page) {
             display.print("x");
         
     } else if(page == 4) {
-        // Page 4: Power Display
         #ifdef ESP32
         if(!isChargingModeActive()) {
             updateAnimationTargets();
@@ -647,7 +695,6 @@ void updateDisplay(int page) {
         int digits = powerStr.length();
         bool isThousand = digits >= 4;
         
-        // Tanda +/-
         if(displayPower > 0.1f) {
             display.setTextSize(2);
             display.setCursor(10, 4);
@@ -658,7 +705,6 @@ void updateDisplay(int page) {
             display.print("-");
         }
         
-        // Angka besar
         display.setTextSize(3);
         int numberX;
         if(displayPower > 0.1f || displayPower < -0.1f) {
@@ -670,7 +716,6 @@ void updateDisplay(int page) {
         display.setCursor(numberX, 2);
         display.print(powerStr);
         
-        // "watt" label
         display.setTextSize(1);
         if(isThousand) {
             int approxNumWidth = digits * 18;
@@ -684,10 +729,12 @@ void updateDisplay(int page) {
         
     } else {
         updateDisplay(1);
+        releaseI2C();
         return;
     }
     
     display.display();
+    releaseI2C();
 }
 
 void showSetupMode(bool blinkState) {

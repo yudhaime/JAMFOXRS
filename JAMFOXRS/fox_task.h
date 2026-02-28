@@ -28,7 +28,7 @@ typedef enum {
     EVENT_SETUP_EXIT,
     EVENT_DISPLAY_READY,
     EVENT_FORCE_NORMAL,
-    EVENT_MODE_CHANGED  // Ditambahkan untuk sync mode changes
+    EVENT_MODE_CHANGED 
 } EventType;
 
 typedef struct {

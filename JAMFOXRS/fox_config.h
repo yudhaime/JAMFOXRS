@@ -279,4 +279,17 @@ static const char* MONTH_NAMES[] = {
 #define I2C_MUTEX_TIMEOUT_MS 100
 #define DATA_MUTEX_TIMEOUT_MS 50
 
+// =============================================
+// BLE CONFIGURATION
+// =============================================
+#define BLE_ENABLED_DEFAULT false
+#define BLE_ACTIVATION_HOLD_MS 5000
+#define BLE_DEACTIVATION_HOLD_MS 2000
+#define BLE_AUTO_OFF_MINUTES 5
+
+// App Mode display
+#define APP_MODE_TEXT "APP MODE"
+#define APP_MODE_POS_X 0
+#define APP_MODE_POS_Y 18
+
 #endif
