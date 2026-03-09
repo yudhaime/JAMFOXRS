@@ -30,31 +30,6 @@ Jika kode ini membantu mungkin sedikit donasi akan sangat saya hargai
 - Kapasitor Elco 1000uF/16V
 - Kapasitor Keramik 100nF 0.1uF 104 50V 10%
 
-## 💿 SOFTWARE dan DRIVER
-### ARDUINO IDE
-download di https://www.arduino.cc/en/software/
-### DRIVER
-#### Untuk macOS:
-- CP210x: https://www.silabs.com/developers/usb-to-uart-bridge-vcp-drivers
-- CH340: Otomatis terinstall di macOS High Sierra ke atas
-#### Untuk Windows:
-- CP210x: https://www.silabs.com/developers/usb-to-uart-bridge-vcp-drivers
-- CH340: http://www.wch.cn/download/CH341SER_EXE.html
-
-## 📚 Library
-### Adafruit SSD1306 (untuk OLED Display)
-- Library: Adafruit GFX Library by Adafruit  
-- Instal via: Library Manager (cari "Adafruit GFX")
-- Versi: 1.11.9 atau yang terbaru
-### Adafruit GFX Library (dependency untuk SSD1306)
-- Library: Adafruit GFX Library by Adafruit  
-- Instal via: Library Manager (cari "Adafruit GFX")
-- Versi: 1.11.9 atau yang terbaru
-### RTClib by Adafruit
-- Library: RTClib by Adafruit
-- Instal via: Library Manager (cari "RTClib")
-- Versi: 2.1.3 atau yang terbaru
-
 ### 
 
 ## 🪛 WIRING DAN PIN DIAGRAM
@@ -195,6 +170,20 @@ download di https://www.arduino.cc/en/software/
 │                                                           │
 └───────────────────────────────────────────────────────────┘
 ```
+# Cara Instal
+Ada dua cara instal yaitu melalui 
+1. ESPHOME (mudah namun tidak bisa mengubah config)
+2. Arduino IDE (untuk user advance)
+
+# Cara instalasi via ESP Home
+
+1. Buka halaman [RELEASE](https://github.com/yudhaime/JAMFOXRS/releases/) lalu download [firmware.bin](https://github.com/yudhaime/JAMFOXRS/releases/download/firmware/firmware.bin)
+2. Buka [ESPHome](https://web.esphome.io/) melalui browser (dianjurkan menggunakan Chrome)
+3. Klik Connect pilih port usb yang digunakan oleh ESP32
+4. Klik instal
+5. Upload firmware.bin
+6. Tunggu sampai selesai
+7. Modul siap digunakan
 
 # Cara Instalasi di Arduino IDE:
 Buka program ARDUINO IDE di PC/Mac lalu ikuti langkah berikut
