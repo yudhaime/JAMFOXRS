@@ -17,7 +17,7 @@ Jika kode ini membantu mungkin sedikit donasi akan sangat saya hargai
 - Menampilkan voltase dan arus baterai
 - Menampilkan daya baterai dalam watt
 - Pindah Halaman layar dengan menakan tombol
-- Support aplikasi Unoficial Polyron EV (https://github.com/zexry619/pev-app-release/releases/)
+- Support aplikasi [Unoficial Polyron EV](https://github.com/zexry619/pev-app-release/releases/)
 
 ## 🔩 Bahan/Alat yang Dibutuhkan
 - ESP32 DOIT DEVKIT V1
