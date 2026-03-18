@@ -5,6 +5,7 @@
 #include "fox_canbus.h"
 #include "fox_page.h"
 #include "fox_vehicle.h"
+#include "fox_ble.h"
 #include <Arduino.h>
 #include <stdarg.h>
 
@@ -297,6 +298,25 @@ void processSerialCommands() {
             return;
         }
         printDetailedData();
+    }
+    else if (cmd == "BLE") {
+    printBLEStatus();
+    }
+    else if (cmd == "BLEON") {
+        if (!isBLEActive()) {
+            activateBLE();
+            serialPrintflnAlways("BLE activated manually");
+        } else {
+            serialPrintflnAlways("BLE already active");
+        }
+    }
+    else if (cmd == "BLEOFF") {
+        if (isBLEActive()) {
+            deactivateBLE();
+            serialPrintflnAlways("BLE deactivated manually");
+        } else {
+            serialPrintflnAlways("BLE already inactive");
+        }
     }
     else {
         serialPrintflnAlways("ERROR - Unknown command");
