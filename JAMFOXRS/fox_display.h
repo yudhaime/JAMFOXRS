@@ -6,6 +6,7 @@
 #include <Fonts/FreeSansBold18pt7b.h>
 #include <Fonts/FreeSansBold12pt7b.h>
 #include <Fonts/FreeSansBold9pt7b.h>
+#include "fox_config.h"
 
 // Basic display functions
 void initDisplay();
@@ -17,7 +18,7 @@ void resetDisplayState();
 // Thread-safe display functions
 bool safeDisplayUpdate(int page);
 
-// NEW: Font reset and transition functions
+// Font reset and transition functions
 void resetDisplayFont();
 void transitionFromAppModeToClock();
 
@@ -36,6 +37,8 @@ String removeTrailingZero(float value, int decimalPlaces);
 bool safeI2COperation(uint32_t timeoutMs);
 void releaseI2C();
 void recoverI2CBus();
+bool safeI2COperationWithBackoff(uint32_t timeoutMs);
+void hardResetI2C();
 
 // Display status
 extern bool displayReady;
@@ -43,5 +46,19 @@ extern Adafruit_SSD1306 display;
 
 // Charging page check
 bool isChargingPageDisplayed();
+
+// DISPLAY TASK FUNCTIONS
+void initDisplayTask();
+void sendDisplayCommand(DisplayCommandType type, int page = 0, bool blinkState = false);
+bool isDisplayTaskBusy();
+
+// Display State
+extern bool appModeDisplayActive;
+extern unsigned long lastDisplayUpdateTime;
+
+// APP MODE DISPLAY FUNCTIONS
+void updateAppModeDisplay();
+void showAppModeDisplay();
+void showBleOffDisplay();
 
 #endif
