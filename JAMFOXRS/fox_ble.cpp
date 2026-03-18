@@ -6,6 +6,7 @@
 #include "fox_display.h"
 #include "fox_page.h"
 #include "fox_rtc.h"
+#include "fox_task.h"
 #include <BLEDevice.h>
 #include <BLEServer.h>
 #include <BLEUtils.h>
@@ -16,7 +17,7 @@
 // =============================================
 static BLEServer* pServer = nullptr;
 static BLECharacteristic* pCharacteristic = nullptr;
-static volatile bool deviceConnected = false;
+volatile bool deviceConnected = false;
 static bool oldDeviceConnected = false;
 
 // BLE TX State
@@ -26,7 +27,6 @@ static uint16_t bleTxOffset = 0;
 static bool bleTxInProgress = false;
 static uint32_t lastFastSend = 0;
 static uint32_t lastSlowSend = 0;
-static bool sendRequested = false;
 
 // Heartbeat counter
 static unsigned long heartbeatCounter = 0;
@@ -53,8 +53,6 @@ extern Adafruit_SSD1306 display;
 // =============================================
 // FORWARD DECLARATIONS
 // =============================================
-static void showAppModeDisplay();
-static void showBleOffDisplay();
 static void hideAppModeDisplay();
 
 // =============================================
@@ -192,89 +190,6 @@ static uint32_t getSlowUpdateInterval() {
 }
 
 // =============================================
-// DISPLAY APP MODE
-// =============================================
-static void showAppModeDisplay() {
-    if (!displayReady) return;
-    
-    if (!appModeDisplayed) {
-        previousPage = currentPage;
-    }
-    
-    if (safeI2COperation(I2C_MUTEX_TIMEOUT_MS)) {
-        display.setFont();
-        display.setTextSize(1);
-        display.setTextColor(SSD1306_WHITE);
-        display.setTextWrap(false);
-        
-        display.clearDisplay();
-        
-        display.setFont(&FreeSansBold9pt7b);
-        display.setTextSize(1);
-        
-        int textWidth = strlen(APP_MODE_TEXT) * 10;
-        int xPos = (SCREEN_WIDTH - textWidth) / 2;
-        
-        display.setCursor(xPos, APP_MODE_POS_Y);
-        display.print(APP_MODE_TEXT);
-        
-        display.setFont();
-        display.setTextSize(1);
-        
-        if (deviceConnected) {
-            display.setCursor((SCREEN_WIDTH - 50) / 2, 22);
-            display.print("connected");
-        } else {
-            display.setCursor(xPos, 22);
-            display.print("ready to connect");
-        }
-        
-        display.display();
-        releaseI2C();
-        
-        appModeDisplayed = true;
-        waitingForConnection = !deviceConnected;
-        serialPrintfln("[DISPLAY] APP MODE shown");
-    }
-}
-
-// =============================================
-// DISPLAY BLE OFF
-// =============================================
-static void showBleOffDisplay() {
-    if (!displayReady) return;
-    
-    if (safeI2COperation(I2C_MUTEX_TIMEOUT_MS)) {
-        display.setFont();
-        display.setTextSize(1);
-        display.setTextColor(SSD1306_WHITE);
-        display.setTextWrap(false);
-        
-        display.clearDisplay();
-        
-        display.setFont(&FreeSansBold9pt7b);
-        display.setTextSize(1);
-        
-        int textWidth = strlen("BLE OFF") * 10;
-        int xPos = (SCREEN_WIDTH - textWidth) / 2;
-        
-        display.setCursor(xPos, APP_MODE_POS_Y);
-        display.print("BLE OFF");
-        
-        display.setFont();
-        display.setTextSize(1);
-        display.setCursor((SCREEN_WIDTH - 60) / 2, 22);
-        display.print("Disconnected");
-        
-        display.display();
-        releaseI2C();
-        
-        serialPrintfln("[DISPLAY] BLE OFF shown");
-        delay(1500);
-    }
-}
-
-// =============================================
 // HIDE APP MODE
 // =============================================
 static void hideAppModeDisplay() {
@@ -294,7 +209,7 @@ static void hideAppModeDisplay() {
 }
 
 // =============================================
-// BLE CALLBACKS - DENGAN HANDLER SET TIME
+// BLE CALLBACKS
 // =============================================
 class MyServerCallbacks: public BLEServerCallbacks {
     void onConnect(BLEServer* pServer) override {
@@ -374,20 +289,25 @@ class MyCallbacks: public BLECharacteristicCallbacks {
                 pCharacteristic->notify();
                 serialPrintfln("[BLE] Response sent: %s", response.c_str());
             }
-            
-            // ========== HANDLER LAINNYA BISA DITAMBAHKAN DI SINI ==========
         }
     }
 };
 
 // =============================================
-// INIT BLE HARDWARE
+// ACTIVATE BLE - SIMPLIFIED VERSION
 // =============================================
-static void initBLEHardware() {
-    if (bleInitialized) return;
+void activateBLE() {
+    if (bleActive) {
+        serialPrintflnAlways("[BLE] Already active");
+        return;
+    }
     
-    serialPrintflnAlways("[BLE] Initializing hardware...");
+    serialPrintflnAlways("[BLE] Activating...");
     
+    // Simpan page sebelumnya
+    previousPage = currentPage;
+    
+    // Initialize BLE Hardware
     BLEDevice::init(BLE_DEVICE_NAME);
     BLEDevice::setMTU(512);
     
@@ -409,13 +329,7 @@ static void initBLEHardware() {
     
     pService->start();
     
-    bleInitialized = true;
-    serialPrintflnAlways("[BLE] Hardware initialized");
-}
-
-static void startBLEAdvertising() {
-    if (!bleInitialized) return;
-    
+    // Start advertising
     BLEAdvertising *pAdvertising = BLEDevice::getAdvertising();
     pAdvertising->addServiceUUID(SERVICE_UUID);
     pAdvertising->setScanResponse(true);
@@ -423,69 +337,65 @@ static void startBLEAdvertising() {
     pAdvertising->setMaxPreferred(0x12);
     
     BLEDevice::startAdvertising();
-    serialPrintflnAlways("[BLE] Advertising started");
     
-    waitingForConnection = true;
-    showAppModeDisplay();
-}
-
-static void stopBLE() {
-    if (!bleActive) return;
-    
-    serialPrintflnAlways("[BLE] Stopping...");
-    
-    if (deviceConnected) {
-        pServer->disconnect(0);
-        deviceConnected = false;
-    }
-    
-    BLEDevice::stopAdvertising();
-    
-    bleActive = false;
-    waitingForConnection = false;
-    appModeDisplayed = false;
-    
-    serialPrintflnAlways("[BLE] Stopped");
-}
-
-// =============================================
-// PUBLIC FUNCTIONS
-// =============================================
-void activateBLE() {
-    if (bleActive) return;
-    
-    serialPrintflnAlways("[BLE] Activating...");
-    
-    if (!bleInitialized) {
-        initBLEHardware();
-    }
-    
-    startBLEAdvertising();
+    serialPrintflnAlways("[BLE] Advertising started - Name: %s", BLE_DEVICE_NAME);
+    serialPrintflnAlways("[BLE] Service UUID: %s", SERVICE_UUID);
     
     bleActive = true;
+    bleInitialized = true;
     bleLastConnectionTime = millis();
     activationPending = false;
+    waitingForConnection = true;
+    appModeDisplayed = true;
+    
+    // Display APP MODE
+    if (displayTaskHandle != NULL) {
+        appModeDisplayActive = true;
+        sendDisplayCommand(DISPLAY_CMD_CLEAR);
+    } else {
+        showAppModeDisplay();
+    }
 }
 
+// =============================================
+// DEACTIVATE BLE - SIMPLIFIED VERSION
+// =============================================
 void deactivateBLE() {
     if (!bleActive) return;
     
     serialPrintflnAlways("[BLE] Deactivating...");
     
-    if (displayReady) {
-        showBleOffDisplay();
+    // Stop advertising
+    BLEDevice::stopAdvertising();
+    
+    // Disconnect if connected
+    if (deviceConnected) {
+        pServer->disconnect(0);
+        deviceConnected = false;
     }
     
-    stopBLE();
     bleActive = false;
-    activationPending = false;
     waitingForConnection = false;
     appModeDisplayed = false;
+    activationPending = false;
     
-    currentPage = previousPage;
-    safeDisplayUpdate(currentPage);
+    // Tampilkan notifikasi BLE OFF via display task
+    if (displayTaskHandle != NULL) {
+        sendDisplayCommand(DISPLAY_CMD_SHOW_BLE_OFF);
+    } else {
+        // Fallback ke fungsi langsung
+        showBleOffDisplay();
+        delay(3000);
+        currentPage = previousPage;
+        safeDisplayUpdate(currentPage);
+    }
+    
+    serialPrintflnAlways("[BLE] Deactivated - advertising stopped");
 }
 
+// =============================================
+// PUBLIC FUNCTIONS
+// =============================================
 bool isBLEActive() {
     return bleActive;
 }
@@ -662,6 +572,7 @@ static void pumpBleTx() {
 void processBLE() {
     if (!bleActive) return;
     
+    // Auto-off jika tidak ada koneksi
     if (bleActive && !deviceConnected) {
         unsigned long now = millis();
         if (now - bleLastConnectionTime > (BLE_AUTO_OFF_MINUTES * 60 * 1000UL)) {
@@ -671,6 +582,7 @@ void processBLE() {
         }
     }
     
+    // Restart advertising jika disconnect
     if (!deviceConnected && oldDeviceConnected) {
         delay(200);
         BLEDevice::startAdvertising();
@@ -682,23 +594,26 @@ void processBLE() {
         oldDeviceConnected = deviceConnected;
     }
 
-    uint32_t now = millis();
-    
-    if (!bleTxInProgress) {
-        uint32_t fastInterval = getFastUpdateInterval();
-        uint32_t slowInterval = getSlowUpdateInterval();
+    // Hanya kirim data jika ada koneksi
+    if (deviceConnected) {
+        uint32_t now = millis();
         
-        if (now - lastSlowSend >= slowInterval) {
-            lastSlowSend = now;
-            lastFastSend = now;
-            startBleTxIfIdle(false);
-        } else if (now - lastFastSend >= fastInterval) {
-            lastFastSend = now;
-            startBleTxIfIdle(true);
+        if (!bleTxInProgress) {
+            uint32_t fastInterval = getFastUpdateInterval();
+            uint32_t slowInterval = getSlowUpdateInterval();
+            
+            if (now - lastSlowSend >= slowInterval) {
+                lastSlowSend = now;
+                lastFastSend = now;
+                startBleTxIfIdle(false);
+            } else if (now - lastFastSend >= fastInterval) {
+                lastFastSend = now;
+                startBleTxIfIdle(true);
+            }
         }
-    }
 
-    pumpBleTx();
+        pumpBleTx();
+    }
 }
 
 void updateBLEData() {
@@ -706,4 +621,20 @@ void updateBLEData() {
         lastFastSend = 0;
         lastSlowSend = 0;
     }
+}
+
+// =============================================
+// DEBUG FUNCTION - PRINT BLE STATUS
+// =============================================
+void printBLEStatus() {
+    serialPrintflnAlways("\n=== BLE STATUS ===");
+    serialPrintflnAlways("Active: %s", bleActive ? "YES" : "NO");
+    serialPrintflnAlways("Initialized: %s", bleInitialized ? "YES" : "NO");
+    serialPrintflnAlways("Connected: %s", deviceConnected ? "YES" : "NO");
+    serialPrintflnAlways("Advertising: %s", (bleActive && !deviceConnected) ? "YES" : "NO");
+    serialPrintflnAlways("Device Name: %s", BLE_DEVICE_NAME);
+    serialPrintflnAlways("Service UUID: %s", SERVICE_UUID);
+    serialPrintflnAlways("Waiting connection: %s", waitingForConnection ? "YES" : "NO");
+    serialPrintflnAlways("Uptime: %lu seconds", millis() / 1000);
+    serialPrintflnAlways("===================\n");
 }
