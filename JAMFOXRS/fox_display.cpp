@@ -7,6 +7,7 @@
 #include "fox_serial.h"
 #include "fox_page.h"
 #include "fox_ble.h"
+#include "fox_task.h"
 #include <Fonts/FreeSansBold18pt7b.h>
 #include <Fonts/FreeSansBold12pt7b.h>
 #include <Fonts/FreeSansBold9pt7b.h>
@@ -25,6 +26,7 @@ bool displayReady = false;
 
 #ifdef ESP32
 extern SemaphoreHandle_t i2cMutex;
+QueueHandle_t displayQueue = NULL;
 #endif
 
 // =============================================
@@ -50,6 +52,17 @@ static float currentVelocity = 0.0f;
 static const float MAX_VELOCITY = 5.0f;
 static const float ACCELERATION = 10.0f;
 static const float DAMPING = 0.9f;
+
+// =============================================
+// DISPLAY STATE VARIABLES
+// =============================================
+bool appModeDisplayActive = false;
+unsigned long lastDisplayUpdateTime = 0;
+
+// =============================================
+// EXTERNAL VARIABLES FROM BLE
+// =============================================
+extern volatile bool deviceConnected;
 
 // =============================================
 // I2C RECOVERY FUNCTIONS
@@ -104,6 +117,45 @@ void recoverI2CBus() {
     #endif
 }
 
+// =============================================
+// HARD RESET I2C - TARIK PIN KE LOW
+// =============================================
+void hardResetI2C() {
+    serialPrintflnAlways("[I2C] HARD RESET - Pulling pins LOW");
+    
+    #ifdef ESP32
+    // Pull SDA and SCL LOW to reset I2C bus
+    pinMode(SDA_PIN, OUTPUT);
+    pinMode(SCL_PIN, OUTPUT);
+    digitalWrite(SDA_PIN, LOW);
+    digitalWrite(SCL_PIN, LOW);
+    delay(10);
+    
+    // Release pins
+    pinMode(SDA_PIN, INPUT_PULLUP);
+    pinMode(SCL_PIN, INPUT_PULLUP);
+    delay(10);
+    
+    // Restart I2C
+    Wire.end();
+    delay(100);
+    Wire.begin(SDA_PIN, SCL_PIN);
+    Wire.setClock(50000);
+    
+    // Re-init display
+    if(display.begin(SSD1306_SWITCHCAPVCC, OLED_ADDRESS)) {
+        displayInitialized = true;
+        displayReady = true;
+        serialPrintflnAlways("[I2C] HARD RESET successful");
+    } else {
+        serialPrintflnAlways("[I2C] HARD RESET failed - display not responding");
+    }
+    #endif
+}
+
+// =============================================
+// SAFE I2C OPERATION (ORIGINAL)
+// =============================================
 bool safeI2COperation(uint32_t timeoutMs) {
     if(!displayInitialized) return false;
     
@@ -143,6 +195,68 @@ bool safeI2COperation(uint32_t timeoutMs) {
         i2cFailureCount++;
         
         if(i2cFailureCount >= 3) recoverI2CBus();
+    }
+    
+    return success;
+}
+
+// =============================================
+// ENHANCED I2C OPERATION WITH EXPONENTIAL BACKOFF
+// =============================================
+bool safeI2COperationWithBackoff(uint32_t timeoutMs) {
+    if(!displayInitialized) return false;
+    
+    #ifdef ESP32
+    if(i2cOperationInProgress) return false;
+    i2cOperationInProgress = true;
+    
+    if(i2cMutex != NULL) {
+        if(xSemaphoreTake(i2cMutex, 0) != pdTRUE) {
+            i2cOperationInProgress = false;
+            return false;
+        }
+    }
+    #endif
+    
+    bool success = false;
+    int retryCount = 0;
+    uint32_t delayMs = I2C_RETRY_DELAY_BASE_MS;
+    
+    while (retryCount < I2C_MAX_RETRIES && !success) {
+        unsigned long startTime = micros();
+        uint8_t error = 5;
+        
+        while(micros() - startTime < 500) {
+            Wire.beginTransmission(OLED_ADDRESS);
+            Wire.write(0x00);
+            error = Wire.endTransmission(true);
+            
+            if(error == 0) break;
+            delayMicroseconds(10);
+        }
+        
+        success = (error == 0);
+        
+        if (!success) {
+            retryCount++;
+            delay(delayMs);
+            delayMs *= 2; // Exponential backoff
+        }
+    }
+    
+    #ifdef ESP32
+    if(i2cMutex != NULL) xSemaphoreGive(i2cMutex);
+    i2cOperationInProgress = false;
+    #endif
+    
+    if(!success) {
+        lastI2CFailure = millis();
+        i2cFailureCount++;
+        
+        if(i2cFailureCount >= I2C_RECOVERY_MAX_ATTEMPTS) {
+            hardResetI2C();
+            i2cFailureCount = 0;
+        }
     }
     
     return success;
@@ -387,7 +501,10 @@ void initDisplay() {
             displayInitialized = true;
             displayReady = true;
             resetAnimation();
+            
+            // Tampilkan splash screen hanya SEKALI
             showSplashScreen();
+            
             display.clearDisplay();
             display.display();
             serialPrintf("[DISPLAY] Initialized successfully\n");
@@ -417,6 +534,87 @@ void resetDisplayFont() {
         display.setCursor(0, 0);
         releaseI2C();
     }
+}
+
+// =============================================
+// UPDATE DISPLAY IN APP MODE - FONT SPLASH SCREEN
+// =============================================
+void updateAppModeDisplay() {
+    if (!displayInitialized || !displayReady) return;
+    
+    if (safeI2COperationWithBackoff(I2C_MUTEX_TIMEOUT_MS)) {
+        // Clear seluruh display
+        display.clearDisplay();
+        
+        // Tampilkan "APP MODE" dengan font splash screen (9pt)
+        display.setFont(&FreeSansBold9pt7b);
+        display.setTextSize(1);
+        
+        // Hitung posisi tengah untuk "APP MODE"
+        int textWidth = 7 * 10; // "APP MODE" = 7 karakter * 10px (approx)
+        int textX = (SCREEN_WIDTH - textWidth) / 2;
+        display.setCursor(textX, 20); // Y=20 agar pas di tengah
+        display.print("APP MODE");
+        
+        // Tampilkan status koneksi di bagian bawah
+        display.setFont();
+        display.setTextSize(1);
+        
+        // Gunakan deviceConnected dari BLE
+        if (deviceConnected) {
+            display.setCursor((SCREEN_WIDTH - 50) / 2, 55);
+            display.print("connected");
+        } else {
+            display.setCursor((SCREEN_WIDTH - 60) / 2, 55);
+            display.print("waiting...");
+        }
+        
+        display.display();
+        releaseI2C();
+    }
+}
+
+// =============================================
+// DISPLAY BLE OFF - DURASI LEBIH LAMA
+// =============================================
+void showBleOffDisplay() {
+    if (!displayReady) return;
+    
+    if (safeI2COperation(I2C_MUTEX_TIMEOUT_MS)) {
+        display.setFont();
+        display.setTextSize(1);
+        display.setTextColor(SSD1306_WHITE);
+        display.setTextWrap(false);
+        
+        display.clearDisplay();
+        
+        // Tampilkan "BLE OFF" dengan font splash screen (9pt)
+        display.setFont(&FreeSansBold9pt7b);
+        display.setTextSize(1);
+        
+        int textWidth = 6 * 10; // "BLE OFF" = 6 karakter * 10px
+        int textX = (SCREEN_WIDTH - textWidth) / 2;
+        display.setCursor(textX, 20);
+        display.print("BLE OFF");
+        
+        // Tampilkan teks tambahan
+        display.setFont();
+        display.setTextSize(1);
+        display.setCursor((SCREEN_WIDTH - 70) / 2, 35);
+        display.print("Disconnected");
+        
+        display.display();
+        releaseI2C();
+        
+        serialPrintfln("[DISPLAY] BLE OFF shown");
+    }
+}
+
+// =============================================
+// APP MODE DISPLAY (PUBLIC)
+// =============================================
+void showAppModeDisplay() {
+    updateAppModeDisplay();
 }
 
 // =============================================
@@ -763,4 +961,184 @@ void showSetupMode(bool blinkState) {
 
 bool isDisplayInitialized() {
     return displayInitialized;
+}
+
+// =============================================
+// INIT DISPLAY TASK
+// =============================================
+void initDisplayTask() {
+    #ifdef ESP32
+    if (!DISPLAY_TASK_ENABLED) return;
+    
+    // Create queue for display commands
+    displayQueue = xQueueCreate(DISPLAY_QUEUE_SIZE, sizeof(DisplayCommand));
+    
+    if (displayQueue == NULL) {
+        serialPrintflnAlways("[DISPLAY] ERROR: Failed to create display queue");
+        return;
+    }
+    
+    serialPrintflnAlways("[DISPLAY] Display queue created");
+    #endif
+}
+
+// =============================================
+// SEND COMMAND TO DISPLAY TASK
+// =============================================
+void sendDisplayCommand(DisplayCommandType type, int page, bool blinkState) {
+    #ifdef ESP32
+    if (displayQueue == NULL) return;
+    
+    DisplayCommand cmd;
+    cmd.type = type;
+    cmd.page = page;
+    cmd.blinkState = blinkState;
+    cmd.timestamp = millis();
+    
+    // Try to send to queue, don't block if full
+    if (xQueueSend(displayQueue, &cmd, 0) != pdTRUE) {
+        // Queue full, drop command
+        serialPrintfln("[DISPLAY] Queue full, dropping command %d", type);
+    }
+    #endif
+}
+
+// =============================================
+// CHECK IF DISPLAY TASK IS BUSY
+// =============================================
+bool isDisplayTaskBusy() {
+    #ifdef ESP32
+    if (displayQueue == NULL) return false;
+    return (uxQueueMessagesWaiting(displayQueue) > 0);
+    #else
+    return false;
+    #endif
+}
+
+// =============================================
+// DISPLAY TASK FUNCTION - RUN ON CORE 1
+// =============================================
+void displayTask(void *pvParameters) {
+    #ifdef ESP32
+    TickType_t xLastWakeTime = xTaskGetTickCount();
+    DisplayCommand cmd;
+    unsigned long lastUpdateTime = 0;
+    bool inAppMode = false;
+    bool showingBleOff = false;
+    unsigned long bleOffStartTime = 0;
+    
+    serialPrintflnAlways("[DISPLAY] Task started on Core %d", xPortGetCoreID());
+    
+    // Tunggu display siap dari setup
+    int waitCount = 0;
+    while (!displayReady && waitCount < 50) {  // Tunggu max 2.5 detik
+        vTaskDelay(pdMS_TO_TICKS(50));
+        waitCount++;
+    }
+    
+    if (!displayReady) {
+        serialPrintflnAlways("[DISPLAY] ERROR: Display not ready after waiting");
+    }
+    
+    // Clear display once at start
+    if (displayReady) {
+        if (safeI2COperationWithBackoff(I2C_MUTEX_TIMEOUT_MS)) {
+            display.clearDisplay();
+            display.display();
+            serialPrintflnAlways("[DISPLAY] Initial clear done");
+        }
+    }
+    
+    while (true) {
+        // Check for commands in queue (non-blocking)
+        if (xQueueReceive(displayQueue, &cmd, 0) == pdTRUE) {
+            // Process command
+            if (!displayReady) continue;
+            
+            switch (cmd.type) {
+                case DISPLAY_CMD_UPDATE_PAGE:
+                    if (!inAppMode && !showingBleOff) {
+                        safeI2COperationWithBackoff(I2C_MUTEX_TIMEOUT_MS);
+                        updateDisplay(cmd.page);
+                        lastUpdateTime = millis();
+                    }
+                    break;
+                    
+                case DISPLAY_CMD_UPDATE_CLOCK:
+                    if (inAppMode && !showingBleOff) {
+                        updateAppModeDisplay();
+                        lastUpdateTime = millis();
+                    }
+                    break;
+                    
+                case DISPLAY_CMD_TRANSITION_TO_CLOCK:
+                    if (!showingBleOff) {
+                        inAppMode = false;
+                        transitionFromAppModeToClock();
+                        lastUpdateTime = millis();
+                    }
+                    break;
+                    
+                case DISPLAY_CMD_CLEAR:
+                    if (!showingBleOff) {
+                        if (safeI2COperationWithBackoff(I2C_MUTEX_TIMEOUT_MS)) {
+                            display.clearDisplay();
+                            display.display();
+                        }
+                    }
+                    break;
+                    
+                case DISPLAY_CMD_SHOW_BLE_OFF:
+                    // Tampilkan BLE OFF dan mulai timer
+                    showBleOffDisplay();
+                    showingBleOff = true;
+                    bleOffStartTime = millis();
+                    break;
+                    
+                case DISPLAY_CMD_RESET:
+                    hardResetI2C();
+                    break;
+                    
+                default:
+                    break;
+            }
+        }
+        
+        // Auto-update based on mode
+        if (displayReady) {
+            unsigned long now = millis();
+            
+            // Cek apakah sedang menampilkan BLE OFF
+            if (showingBleOff) {
+                if (now - bleOffStartTime >= 3000) {
+                    showingBleOff = false;
+                    // Kembali ke mode normal
+                    inAppMode = isInAppMode();
+                    if (!inAppMode) {
+                        transitionFromAppModeToClock();
+                    }
+                }
+            } else {
+                uint32_t updateInterval = inAppMode ? DISPLAY_APP_MODE_UPDATE_MS : DISPLAY_UPDATE_INTERVAL_MS;
+                
+                if (now - lastUpdateTime >= updateInterval) {
+                    if (inAppMode) {
+                        updateAppModeDisplay();
+                    } else {
+                        safeI2COperationWithBackoff(I2C_MUTEX_TIMEOUT_MS);
+                        updateDisplay(currentPage);
+                    }
+                    lastUpdateTime = now;
+                }
+            }
+        }
+        
+        // Check for mode change (set by main loop via flag)
+        if (!showingBleOff) {
+            inAppMode = isInAppMode();
+        }
+        
+        vTaskDelayUntil(&xLastWakeTime, pdMS_TO_TICKS(100)); // 100ms = 10Hz check
+    }
+    #endif
 }
