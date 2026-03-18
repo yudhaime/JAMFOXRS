@@ -292,4 +292,53 @@ static const char* MONTH_NAMES[] = {
 #define APP_MODE_POS_X 0
 #define APP_MODE_POS_Y 18
 
+// =============================================
+// DISPLAY TASK CONFIGURATION - NEW
+// =============================================
+#define DISPLAY_TASK_ENABLED true
+#define DISPLAY_UPDATE_INTERVAL_MS 200        // 5 FPS (200ms) untuk semua page
+#define DISPLAY_APP_MODE_UPDATE_MS 1000       // 1 FPS untuk mode APP (hanya jam)
+#define DISPLAY_QUEUE_SIZE 5                   // Queue untuk display commands
+#define DISPLAY_TASK_STACK_SIZE 3072           // Stack untuk display task
+#define DISPLAY_TASK_PRIORITY 2                 // Priority display task
+#define DISPLAY_TASK_CORE 1                      // Jalankan di Core 1
+
+// =============================================
+// I2C RECOVERY CONFIGURATION - ENHANCED
+// =============================================
+#define I2C_MAX_RETRIES 5
+#define I2C_RETRY_DELAY_BASE_MS 100             // Base delay untuk exponential backoff
+#define I2C_HARD_RESET_ENABLED true              // Reset pin SDA/SCL ke LOW dulu
+#define I2C_RECOVERY_MAX_ATTEMPTS 3               // Maksimal reset total sebelum restart
+
+// =============================================
+// BLE LIFECYCLE CONFIGURATION - NEW
+// =============================================
+#define BLE_AUTO_OFF_MINUTES 5                    // Auto-off setelah X menit idle
+#define BLE_KEEP_ALIVE_WHEN_CONNECTED true        // BLE tetap menyala jika ada koneksi
+#define BLE_DEINIT_ON_DISABLE true                 // BLE benar-benar dideinit saat mati
+#define BLE_RECONNECT_DELAY_MS 2000                // Delay sebelum restart advertising
+
+// =============================================
+// DISPLAY COMMAND TYPES FOR QUEUE - NEW
+// =============================================
+typedef enum {
+    DISPLAY_CMD_NONE = 0,
+    DISPLAY_CMD_UPDATE_PAGE,
+    DISPLAY_CMD_UPDATE_CLOCK,
+    DISPLAY_CMD_SHOW_SPLASH,
+    DISPLAY_CMD_SHOW_SETUP,
+    DISPLAY_CMD_CLEAR,
+    DISPLAY_CMD_RESET,
+    DISPLAY_CMD_TRANSITION_TO_CLOCK,
+    DISPLAY_CMD_SHOW_BLE_OFF 
+} DisplayCommandType;
+
+typedef struct {
+    DisplayCommandType type;
+    int page;
+    bool blinkState;
+    uint32_t timestamp;
+} DisplayCommand;
+
 #endif
